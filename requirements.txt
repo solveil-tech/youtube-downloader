@@ -1,0 +1,5 @@
+PyInstaller==6.22.3
+PyQt6==6.11.0
+PyQt6-Qt6==6.11.2
+qtawesome==1.4.2
+requests==2.34.2

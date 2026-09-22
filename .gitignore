@@ -1,0 +1,16 @@
+cookies.txt
+*.part
+*.ytdl
+*.tmp
+*.temp
+*.log
+__pycache__/
+.venv/
+.buildenv/
+.packenv/
+.package_build/
+.package_dist/
+.package_spec/
+build/
+dist/
+*.spec.bak
