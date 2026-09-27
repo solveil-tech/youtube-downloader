@@ -4,6 +4,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import traceback
 from pathlib import Path
@@ -22,7 +23,7 @@ if getattr(sys, "frozen", False) and os.name == "nt":
             _QT_DLL_DIRECTORY_HANDLE = os.add_dll_directory(str(_qt_dll_dir))
 
 from PyQt6.QtCore import QEvent, QPoint, QProcess, QRectF, QSettings, QSize, Qt, QThread, QTimer, QUrl, pyqtSignal
-from PyQt6.QtGui import QAction, QColor, QDesktopServices, QFont, QIcon, QPainter, QPen, QPixmap
+from PyQt6.QtGui import QAction, QColor, QCursor, QDesktopServices, QFont, QIcon, QPainter, QPen, QPixmap
 from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PyQt6.QtMultimediaWidgets import QVideoWidget
 from PyQt6.QtWidgets import (
@@ -40,7 +41,13 @@ except ImportError:
 APP_NAME = "Youtube Downloader"
 ORG_NAME = "Solveil"
 COOKIE_FILE = "cookies.txt"
-MAX_TASKS = 5
+MAX_TASKS = 10
+MAX_AUTO_RETRIES = 3
+AUTO_RETRY_DELAYS_MS = (2000, 5000, 10000)
+DEFAULT_CONCURRENT_DOWNLOADS = 3
+MAX_CONCURRENT_DOWNLOADS = 5
+PREVIEW_CACHE_MAX_FILES = 10
+PREVIEW_CACHE_MAX_BYTES = 500 * 1024 * 1024
 WINDOW_ASPECT_RATIO = 860 / 700
 BG, CARD, TEXT, MUTED = "#f5f6f8", "#ffffff", "#17191d", "#737984"
 ACCENT, ACCENT_HOVER, BORDER, DANGER = "#5668e9", "#4658d8", "#dde1e8", "#d94b54"
@@ -87,6 +94,11 @@ TEXTS = {
     "open_folder": ("打开文件夹", "Open folder", "フォルダーを開く", "폴더 열기", "Ouvrir le dossier", "Ordner öffnen", "Открыть папку", "Apri cartella", "Abrir carpeta", "فتح المجلد"),
     "clear": ("清除", "Clear", "消去", "지우기", "Effacer", "Löschen", "Очистить", "Cancella", "Borrar", "مسح"),
     "hide_task": ("隐藏任务", "Hide task", "タスクを隠す", "작업 숨기기", "Masquer la tâche", "Aufgabe ausblenden", "Скрыть задачу", "Nascondi attività", "Ocultar tarea", "إخفاء المهمة"),
+    "retry": ("重试", "Retry", "再試行", "다시 시도", "Réessayer", "Erneut versuchen", "Повторить", "Riprova", "Reintentar", "إعادة المحاولة"),
+    "copy_link": ("复制视频链接", "Copy video link", "動画リンクをコピー", "동영상 링크 복사", "Copier le lien vidéo", "Videolink kopieren", "Копировать ссылку", "Copia link video", "Copiar enlace del vídeo", "نسخ رابط الفيديو"),
+    "open_video": ("打开视频页面", "Open video page", "動画ページを開く", "동영상 페이지 열기", "Ouvrir la page vidéo", "Videoseite öffnen", "Открыть страницу видео", "Apri pagina video", "Abrir página del vídeo", "فتح صفحة الفيديو"),
+    "half_speed": ("0.5 倍速", "0.5× speed", "0.5倍速", "0.5배속", "Vitesse 0,5×", "0,5-fache Geschwindigkeit", "Скорость 0,5×", "Velocità 0,5×", "Velocidad 0,5×", "سرعة 0.5×"),
+    "double_speed": ("2 倍速", "2× speed", "2倍速", "2배속", "Vitesse 2×", "2-fache Geschwindigkeit", "Скорость 2×", "Velocità 2×", "Velocidad 2×", "سرعة 2×"),
     "resume": ("继续", "Resume", "再開", "계속", "Reprendre", "Fortsetzen", "Продолжить", "Riprendi", "Reanudar", "متابعة"),
     "remaining": ("剩余 {value}", "{value} remaining", "残り {value}", "남은 시간 {value}", "{value} restantes", "Noch {value}", "Осталось {value}", "{value} rimanenti", "Quedan {value}", "متبقي {value}"),
     "downloading": ("正在下载", "Downloading", "ダウンロード中", "다운로드 중", "Téléchargement", "Wird heruntergeladen", "Загрузка", "Download in corso", "Descargando", "جارٍ التنزيل"),
@@ -97,6 +109,79 @@ TEXTS = {
     "muxing": ("正在封装", "Muxing", "多重化中", "병합 중", "Muxage", "Muxing", "Мультиплексирование", "Muxing", "Multiplexando", "جارٍ الدمج"),
     "muxing_detail": ("音视频合并处理中", "Combining audio and video", "映像と音声を結合中", "오디오와 비디오 병합 중", "Fusion audio et vidéo", "Audio und Video werden verbunden", "Объединение аудио и видео", "Unione audio e video", "Combinando audio y vídeo", "جارٍ دمج الصوت والفيديو"),
     "finished": ("下载完成", "Download complete", "ダウンロード完了", "다운로드 완료", "Téléchargement terminé", "Download abgeschlossen", "Загрузка завершена", "Download completato", "Descarga completada", "اكتمل التنزيل"),
+    "concurrent_downloads": ("并行任务数", "Parallel tasks", "並行タスク数", "병렬 작업 수", "Tâches parallèles", "Parallele Aufgaben", "Параллельные задачи", "Attività parallele", "Tareas paralelas", "المهام المتوازية"),
+    "check_engine_update": ("检查下载引擎更新", "Check downloader engine update", "ダウンロードエンジンを更新", "다운로드 엔진 업데이트 확인", "Vérifier le moteur", "Downloader aktualisieren", "Проверить обновление движка", "Aggiorna motore", "Actualizar motor", "التحقق من تحديث المحرك"),
+    "error_details": ("错误详情", "Error details", "エラー詳細", "오류 세부정보", "Détails de l’erreur", "Fehlerdetails", "Подробности ошибки", "Dettagli errore", "Detalles del error", "تفاصيل الخطأ"),
+    "copy_error": ("复制错误", "Copy error", "エラーをコピー", "오류 복사", "Copier l’erreur", "Fehler kopieren", "Копировать ошибку", "Copia errore", "Copiar error", "نسخ الخطأ"),
+    "clear_task_title": ("清除任务", "Clear task", "タスクを消去", "작업 지우기", "Effacer la tâche", "Aufgabe löschen", "Очистить задачу", "Cancella attività", "Borrar tarea", "مسح المهمة"),
+    "clear_task_message": ("将停止任务，并删除成品、未完成文件及相关临时文件。是否继续？", "Stop the task and delete completed, partial, and temporary files?", "タスクを停止し、完成・未完成・一時ファイルを削除しますか？", "작업을 중지하고 완성본, 미완성 및 임시 파일을 삭제할까요?", "Arrêter la tâche et supprimer les fichiers terminés, partiels et temporaires ?", "Aufgabe stoppen und fertige, unvollständige sowie temporäre Dateien löschen?", "Остановить задачу и удалить готовые, неполные и временные файлы?", "Interrompere e eliminare file completi, parziali e temporanei?", "¿Detener y eliminar archivos completos, parciales y temporales?", "هل تريد إيقاف المهمة وحذف الملفات المكتملة والجزئية والمؤقتة؟"),
+    "hide_task_title": ("隐藏任务", "Hide task", "タスクを隠す", "작업 숨기기", "Masquer la tâche", "Aufgabe ausblenden", "Скрыть задачу", "Nascondi attività", "Ocultar tarea", "إخفاء المهمة"),
+    "hide_task_message": ("将停止任务并删除未完成缓存，但不会删除已经保存好的文件。是否继续？", "Stop the task and delete partial cache while keeping completed files?", "タスクを停止して未完了キャッシュを削除し、完成ファイルは保持しますか？", "작업을 중지하고 미완성 캐시는 삭제하되 완료 파일은 유지할까요?", "Arrêter la tâche et supprimer le cache partiel en conservant les fichiers terminés ?", "Aufgabe stoppen und unvollständigen Cache löschen, fertige Dateien behalten?", "Остановить задачу и удалить незавершённый кэш, сохранив готовые файлы?", "Interrompere ed eliminare la cache incompleta mantenendo i file completi?", "¿Detener y borrar la caché parcial conservando los archivos terminados?", "هل تريد إيقاف المهمة وحذف التخزين الجزئي مع الاحتفاظ بالملفات المكتملة؟"),
+    "invalid_link_title": ("链接无效", "Invalid link", "無効なリンク", "잘못된 링크", "Lien invalide", "Ungültiger Link", "Недопустимая ссылка", "Link non valido", "Enlace no válido", "رابط غير صالح"),
+    "invalid_link_message": ("请输入有效的 YouTube 视频链接", "Enter a valid YouTube video link", "有効なYouTube動画リンクを入力してください", "유효한 YouTube 동영상 링크를 입력하세요", "Saisissez un lien vidéo YouTube valide", "Gültigen YouTube-Videolink eingeben", "Введите действительную ссылку YouTube", "Inserisci un link YouTube valido", "Introduce un enlace de YouTube válido", "أدخل رابط فيديو YouTube صالحاً"),
+    "parse_failed_title": ("解析失败", "Analysis failed", "解析に失敗", "분석 실패", "Échec de l’analyse", "Analyse fehlgeschlagen", "Ошибка анализа", "Analisi non riuscita", "Error de análisis", "فشل التحليل"),
+    "not_parsed_title": ("尚未解析", "Not analyzed", "未解析", "분석되지 않음", "Non analysé", "Noch nicht analysiert", "Не проанализировано", "Non analizzato", "Sin analizar", "لم يتم التحليل"),
+    "not_parsed_message": ("请先解析视频", "Analyze the video first", "先に動画を解析してください", "먼저 동영상을 분석하세요", "Analysez d’abord la vidéo", "Video zuerst analysieren", "Сначала проанализируйте видео", "Analizza prima il video", "Analiza primero el vídeo", "حلل الفيديو أولاً"),
+    "preview_unavailable_title": ("无法预览", "Preview unavailable", "プレビュー不可", "미리보기 불가", "Aperçu indisponible", "Vorschau nicht verfügbar", "Предпросмотр недоступен", "Anteprima non disponibile", "Vista previa no disponible", "المعاينة غير متاحة"),
+    "preview_unavailable_message": ("当前视频没有可用的预览流", "No usable preview stream is available", "利用可能なプレビュー映像がありません", "사용 가능한 미리보기 스트림이 없습니다", "Aucun flux d’aperçu utilisable", "Kein nutzbarer Vorschaustream", "Нет доступного потока предпросмотра", "Nessun flusso di anteprima disponibile", "No hay una transmisión de vista previa disponible", "لا يوجد بث معاينة متاح"),
+    "boundary_invalid_title": ("边界无效", "Invalid boundary", "無効な境界", "잘못된 경계", "Limite invalide", "Ungültige Grenze", "Недопустимая граница", "Limite non valido", "Límite no válido", "حد غير صالح"),
+    "start_boundary_message": ("左边界必须早于右边界", "The start must be before the end", "開始位置は終了位置より前にしてください", "시작 지점은 종료 지점보다 앞이어야 합니다", "Le début doit précéder la fin", "Start muss vor Ende liegen", "Начало должно быть раньше конца", "L’inizio deve precedere la fine", "El inicio debe ser anterior al final", "يجب أن تكون البداية قبل النهاية"),
+    "end_boundary_message": ("右边界必须晚于左边界", "The end must be after the start", "終了位置は開始位置より後にしてください", "종료 지점은 시작 지점보다 뒤여야 합니다", "La fin doit suivre le début", "Ende muss nach Start liegen", "Конец должен быть позже начала", "La fine deve seguire l’inizio", "El final debe ser posterior al inicio", "يجب أن تكون النهاية بعد البداية"),
+    "range_invalid_title": ("区间无效", "Invalid range", "無効な範囲", "잘못된 구간", "Plage invalide", "Ungültiger Bereich", "Недопустимый диапазон", "Intervallo non valido", "Rango no válido", "نطاق غير صالح"),
+    "range_invalid_message": ("请先用 [ 和 ] 设置有效区间", "Set a valid range with [ and ] first", "[ と ] で有効な範囲を設定してください", "[ 및 ]로 유효한 구간을 먼저 설정하세요", "Définissez d’abord une plage avec [ et ]", "Zuerst mit [ und ] einen gültigen Bereich setzen", "Сначала задайте диапазон кнопками [ и ]", "Imposta prima un intervallo con [ e ]", "Define primero un rango con [ y ]", "حدد نطاقاً صالحاً باستخدام [ و ] أولاً"),
+    "range_not_applied_title": ("区间未应用", "Range not applied", "範囲未適用", "구간 미적용", "Plage non appliquée", "Bereich nicht angewendet", "Диапазон не применён", "Intervallo non applicato", "Rango no aplicado", "لم يتم تطبيق النطاق"),
+    "range_not_applied_message": ("请先设置并应用视频区间", "Set and apply the video range first", "先に動画範囲を設定して適用してください", "먼저 동영상 구간을 설정하고 적용하세요", "Définissez et appliquez d’abord la plage vidéo", "Videobereich zuerst festlegen und anwenden", "Сначала задайте и примените диапазон", "Imposta e applica prima l’intervallo", "Define y aplica primero el rango", "حدد نطاق الفيديو وطبقه أولاً"),
+    "file_exists_title": ("文件已存在", "File already exists", "ファイルは既に存在します", "파일이 이미 존재함", "Le fichier existe", "Datei existiert", "Файл уже существует", "File già esistente", "El archivo ya existe", "الملف موجود بالفعل"),
+    "file_exists_message": ("目标文件已经存在：\n{value}", "The target file already exists:\n{value}", "対象ファイルは既に存在します：\n{value}", "대상 파일이 이미 존재합니다:\n{value}", "Le fichier cible existe déjà :\n{value}", "Die Zieldatei existiert bereits:\n{value}", "Целевой файл уже существует:\n{value}", "Il file di destinazione esiste già:\n{value}", "El archivo de destino ya existe:\n{value}", "الملف الهدف موجود بالفعل:\n{value}"),
+    "overwrite": ("覆盖", "Overwrite", "上書き", "덮어쓰기", "Écraser", "Überschreiben", "Перезаписать", "Sovrascrivi", "Sobrescribir", "استبدال"),
+    "cancel_download": ("取消下载", "Cancel download", "ダウンロードを中止", "다운로드 취소", "Annuler le téléchargement", "Download abbrechen", "Отменить загрузку", "Annulla download", "Cancelar descarga", "إلغاء التنزيل"),
+    "add_number": ("添加序号", "Add number", "番号を追加", "번호 추가", "Ajouter un numéro", "Nummer hinzufügen", "Добавить номер", "Aggiungi numero", "Añadir número", "إضافة رقم"),
+    "disk_space_title": ("磁盘空间不足", "Not enough disk space", "ディスク容量不足", "디스크 공간 부족", "Espace disque insuffisant", "Nicht genug Speicherplatz", "Недостаточно места", "Spazio su disco insufficiente", "Espacio insuficiente", "مساحة القرص غير كافية"),
+    "disk_space_message": ("预计至少需要 {required}，目标磁盘可用 {free}。\n请更换位置或释放空间。", "At least {required} is needed; {free} is available.\nChoose another location or free space.", "少なくとも {required} 必要で、空きは {free} です。\n保存先を変更するか空きを確保してください。", "최소 {required}이 필요하며 {free}을 사용할 수 있습니다.\n위치를 변경하거나 공간을 확보하세요.", "Au moins {required} sont requis ; {free} sont disponibles.\nChangez d’emplacement ou libérez de l’espace.", "Mindestens {required} benötigt; {free} verfügbar.\nAnderen Ort wählen oder Speicher freigeben.", "Нужно не менее {required}; доступно {free}.\nВыберите другое место или освободите пространство.", "Servono almeno {required}; disponibili {free}.\nCambia posizione o libera spazio.", "Se necesitan al menos {required}; hay {free} disponibles.\nCambia la ubicación o libera espacio.", "يلزم {required} على الأقل والمتاح {free}.\nاختر موقعاً آخر أو وفر مساحة."),
+    "exit_title": ("退出程序", "Exit application", "アプリを終了", "앱 종료", "Quitter l’application", "Anwendung beenden", "Выйти из приложения", "Esci dall’app", "Salir de la aplicación", "إنهاء التطبيق"),
+    "exit_message": ("仍有下载任务运行。退出会暂停任务并保留断点文件，是否退出？", "Downloads are still running. Exiting will pause them and keep partial files. Exit?", "ダウンロード中です。終了すると一時停止し、途中ファイルを保持します。終了しますか？", "다운로드가 진행 중입니다. 종료하면 일시 중지되고 부분 파일은 유지됩니다. 종료할까요?", "Des téléchargements sont actifs. Quitter les mettra en pause en conservant les fichiers partiels. Quitter ?", "Downloads laufen. Beim Beenden werden sie pausiert und Teildateien behalten. Beenden?", "Идут загрузки. При выходе они будут приостановлены, частичные файлы сохранятся. Выйти?", "Sono in corso download. Uscendo verranno sospesi e i file parziali mantenuti. Uscire?", "Hay descargas activas. Al salir se pausarán y se conservarán los archivos parciales. ¿Salir?", "لا تزال هناك تنزيلات. سيؤدي الخروج إلى إيقافها مؤقتاً والاحتفاظ بالملفات الجزئية. هل تريد الخروج؟"),
+    "format_unavailable_title": ("所选格式不可用", "Selected format unavailable", "選択形式は利用不可", "선택한 형식 사용 불가", "Format indisponible", "Format nicht verfügbar", "Формат недоступен", "Formato non disponibile", "Formato no disponible", "التنسيق غير متاح"),
+    "format_unavailable_message": ("视频格式可能已经变化。请重新解析链接并重新选择格式。", "Available formats may have changed. Analyze the link again and reselect a format.", "形式が変更された可能性があります。リンクを再解析して形式を選び直してください。", "사용 가능한 형식이 변경되었을 수 있습니다. 링크를 다시 분석하고 형식을 선택하세요.", "Les formats ont peut-être changé. Analysez à nouveau le lien et choisissez un format.", "Formate haben sich möglicherweise geändert. Link erneut analysieren und Format wählen.", "Форматы могли измениться. Повторно проанализируйте ссылку и выберите формат.", "I formati potrebbero essere cambiati. Analizza di nuovo il link e scegli il formato.", "Los formatos pueden haber cambiado. Analiza de nuevo el enlace y elige un formato.", "ربما تغيرت التنسيقات. حلل الرابط مجدداً واختر التنسيق."),
+    "update_available_title": ("发现引擎更新", "Engine update available", "エンジン更新あり", "엔진 업데이트 있음", "Mise à jour disponible", "Engine-Update verfügbar", "Доступно обновление", "Aggiornamento disponibile", "Actualización disponible", "يتوفر تحديث للمحرك"),
+    "update_available_message": ("当前版本：{current}\n最新版本：{latest}\n是否下载并安装？", "Current: {current}\nLatest: {latest}\nDownload and install?", "現在：{current}\n最新：{latest}\nダウンロードして更新しますか？", "현재: {current}\n최신: {latest}\n다운로드하고 설치할까요?", "Actuelle : {current}\nDernière : {latest}\nTélécharger et installer ?", "Aktuell: {current}\nNeu: {latest}\nHerunterladen und installieren?", "Текущая: {current}\nНовая: {latest}\nСкачать и установить?", "Attuale: {current}\nUltima: {latest}\nScaricare e installare?", "Actual: {current}\nÚltima: {latest}\n¿Descargar e instalar?", "الحالي: {current}\nالأحدث: {latest}\nهل تريد التنزيل والتثبيت؟"),
+    "up_to_date_title": ("已是最新版本", "Up to date", "最新版です", "최신 버전", "À jour", "Aktuell", "Уже обновлено", "Aggiornato", "Actualizado", "محدث"),
+    "up_to_date_message": ("当前下载引擎已是最新版本：{value}", "The downloader engine is up to date: {value}", "ダウンロードエンジンは最新版です：{value}", "다운로드 엔진이 최신 버전입니다: {value}", "Le moteur est à jour : {value}", "Downloader ist aktuell: {value}", "Движок загрузки обновлён: {value}", "Il motore è aggiornato: {value}", "El motor está actualizado: {value}", "محرك التنزيل محدث: {value}"),
+    "update_success_title": ("更新完成", "Update complete", "更新完了", "업데이트 완료", "Mise à jour terminée", "Update abgeschlossen", "Обновление завершено", "Aggiornamento completato", "Actualización completada", "اكتمل التحديث"),
+    "update_success_message": ("下载引擎已更新至 {value}", "Downloader engine updated to {value}", "ダウンロードエンジンを {value} に更新しました", "다운로드 엔진이 {value}(으)로 업데이트되었습니다", "Moteur mis à jour vers {value}", "Downloader auf {value} aktualisiert", "Движок обновлён до {value}", "Motore aggiornato a {value}", "Motor actualizado a {value}", "تم تحديث المحرك إلى {value}"),
+    "update_failed_title": ("更新失败", "Update failed", "更新失敗", "업데이트 실패", "Échec de la mise à jour", "Update fehlgeschlagen", "Ошибка обновления", "Aggiornamento non riuscito", "Error de actualización", "فشل التحديث"),
+    "update_busy_message": ("请先等待所有下载停止后再更新引擎。", "Stop all downloads before updating the engine.", "すべてのダウンロードを停止してから更新してください。", "모든 다운로드를 중지한 후 엔진을 업데이트하세요.", "Arrêtez tous les téléchargements avant la mise à jour.", "Vor dem Update alle Downloads stoppen.", "Остановите все загрузки перед обновлением.", "Interrompi tutti i download prima dell’aggiornamento.", "Detén todas las descargas antes de actualizar.", "أوقف جميع التنزيلات قبل تحديث المحرك."),
+    "preview_cache_ready": ("本地预览缓存已就绪", "Local preview cache ready", "ローカルプレビュー準備完了", "로컬 미리보기 캐시 준비됨", "Cache d’aperçu prêt", "Lokale Vorschau bereit", "Локальный предпросмотр готов", "Cache anteprima pronta", "Caché de vista previa lista", "ذاكرة المعاينة المحلية جاهزة"),
+    "preview_cache_loading": ("正在后台缓存片段预览", "Caching clip preview in the background", "クリッププレビューをキャッシュ中", "클립 미리보기를 캐시하는 중", "Mise en cache de l’aperçu", "Clip-Vorschau wird zwischengespeichert", "Кэширование предпросмотра", "Cache anteprima in corso", "Guardando vista previa en caché", "جارٍ تخزين معاينة المقطع"),
+    "paused_state": ("已暂停，可继续断点下载", "Paused — resume is available", "一時停止中（再開可能）", "일시 중지됨 — 이어받기 가능", "En pause — reprise possible", "Pausiert — Fortsetzen möglich", "Приостановлено — можно продолжить", "In pausa — ripresa disponibile", "En pausa — se puede reanudar", "متوقف مؤقتاً — يمكن المتابعة"),
+    "pausing_state": ("正在安全暂停...", "Pausing safely...", "安全に一時停止中...", "안전하게 일시 중지 중...", "Mise en pause...", "Wird sicher pausiert...", "Безопасная приостановка...", "Pausa sicura...", "Pausando de forma segura...", "جارٍ الإيقاف المؤقت بأمان..."),
+    "engine_missing": ("未找到下载引擎 yt_dlp.exe", "Downloader engine yt_dlp.exe was not found", "yt_dlp.exe が見つかりません", "yt_dlp.exe 다운로드 엔진을 찾을 수 없습니다", "Moteur yt_dlp.exe introuvable", "yt_dlp.exe wurde nicht gefunden", "Движок yt_dlp.exe не найден", "Motore yt_dlp.exe non trovato", "No se encontró yt_dlp.exe", "لم يتم العثور على yt_dlp.exe"),
+    "process_failed": ("下载进程异常结束", "Download process ended unexpectedly", "ダウンロード処理が異常終了しました", "다운로드 프로세스가 비정상 종료됨", "Le téléchargement s’est arrêté", "Downloadprozess wurde unerwartet beendet", "Процесс загрузки завершился с ошибкой", "Il processo di download è terminato in modo anomalo", "El proceso de descarga terminó inesperadamente", "انتهت عملية التنزيل بشكل غير متوقع"),
+    "untitled_video": ("未命名视频", "Untitled video", "無題の動画", "제목 없는 동영상", "Vidéo sans titre", "Unbenanntes Video", "Видео без названия", "Video senza titolo", "Vídeo sin título", "فيديو بلا عنوان"),
+    "unknown_channel": ("未知频道", "Unknown channel", "不明なチャンネル", "알 수 없는 채널", "Chaîne inconnue", "Unbekannter Kanal", "Неизвестный канал", "Canale sconosciuto", "Canal desconocido", "قناة غير معروفة"),
+    "preview_init_title": ("预览初始化失败", "Preview initialization failed", "プレビュー初期化失敗", "미리보기 초기화 실패", "Échec de l’aperçu", "Vorschau konnte nicht gestartet werden", "Ошибка инициализации предпросмотра", "Inizializzazione anteprima non riuscita", "Error al iniciar la vista previa", "فشل تهيئة المعاينة"),
+    "preview_init_message": ("Qt 视频预览组件无法初始化：\n{value}", "Qt video preview could not initialize:\n{value}", "Qt動画プレビューを初期化できません：\n{value}", "Qt 동영상 미리보기를 초기화할 수 없습니다:\n{value}", "Impossible d’initialiser l’aperçu Qt :\n{value}", "Qt-Vorschau konnte nicht initialisiert werden:\n{value}", "Не удалось инициализировать Qt-предпросмотр:\n{value}", "Impossibile inizializzare l’anteprima Qt:\n{value}", "No se pudo iniciar la vista previa Qt:\n{value}", "تعذر تهيئة معاينة Qt:\n{value}"),
+    "save_success_title": ("保存成功", "Saved", "保存完了", "저장 완료", "Enregistré", "Gespeichert", "Сохранено", "Salvato", "Guardado", "تم الحفظ"),
+    "cover_saved_message": ("封面已保存", "Thumbnail saved", "サムネイルを保存しました", "썸네일 저장됨", "Miniature enregistrée", "Vorschaubild gespeichert", "Обложка сохранена", "Miniatura salvata", "Miniatura guardada", "تم حفظ الصورة المصغرة"),
+    "save_failed_title": ("保存失败", "Save failed", "保存失敗", "저장 실패", "Échec de l’enregistrement", "Speichern fehlgeschlagen", "Ошибка сохранения", "Salvataggio non riuscito", "Error al guardar", "فشل الحفظ"),
+    "unknown": ("未知", "Unknown", "不明", "알 수 없음", "Inconnu", "Unbekannt", "Неизвестно", "Sconosciuto", "Desconocido", "غير معروف"),
+    "unknown_resolution": ("未知分辨率", "Unknown resolution", "解像度不明", "해상도 알 수 없음", "Résolution inconnue", "Unbekannte Auflösung", "Разрешение неизвестно", "Risoluzione sconosciuta", "Resolución desconocida", "دقة غير معروفة"),
+    "unknown_fps": ("帧率未知", "Unknown frame rate", "フレームレート不明", "프레임 속도 알 수 없음", "Fréquence inconnue", "Unbekannte Bildrate", "Частота кадров неизвестна", "Frame rate sconosciuto", "Fotogramas desconocidos", "معدل إطارات غير معروف"),
+    "unknown_audio_quality": ("音质未知", "Unknown audio quality", "音質不明", "음질 알 수 없음", "Qualité audio inconnue", "Unbekannte Audioqualität", "Качество звука неизвестно", "Qualità audio sconosciuta", "Calidad de audio desconocida", "جودة صوت غير معروفة"),
+    "preview_load_failed": ("预览加载失败", "Preview failed to load", "プレビュー読込失敗", "미리보기 로드 실패", "Échec du chargement", "Vorschau konnte nicht geladen werden", "Ошибка загрузки предпросмотра", "Caricamento anteprima non riuscito", "Error al cargar la vista previa", "فشل تحميل المعاينة"),
+    "save_cover_dialog": ("保存封面", "Save thumbnail", "サムネイルを保存", "썸네일 저장", "Enregistrer la miniature", "Vorschaubild speichern", "Сохранить обложку", "Salva miniatura", "Guardar miniatura", "حفظ الصورة المصغرة"),
+    "save_audio_dialog": ("保存音频", "Save audio", "音声を保存", "오디오 저장", "Enregistrer l’audio", "Audio speichern", "Сохранить аудио", "Salva audio", "Guardar audio", "حفظ الصوت"),
+    "save_video_dialog": ("保存视频", "Save video", "動画を保存", "동영상 저장", "Enregistrer la vidéo", "Video speichern", "Сохранить видео", "Salva video", "Guardar vídeo", "حفظ الفيديو"),
+    "all_files": ("所有文件", "All files", "すべてのファイル", "모든 파일", "Tous les fichiers", "Alle Dateien", "Все файлы", "Tutti i file", "Todos los archivos", "كل الملفات"),
+    "info_parse_failed": ("视频信息解析失败", "Video analysis failed", "動画情報の解析に失敗", "동영상 정보 분석 실패", "Échec de l’analyse vidéo", "Videoanalyse fehlgeschlagen", "Ошибка анализа видео", "Analisi video non riuscita", "Error al analizar el vídeo", "فشل تحليل معلومات الفيديو"),
+    "preview_cache_failed": ("预览缓存失败", "Preview cache failed", "プレビューキャッシュ失敗", "미리보기 캐시 실패", "Échec du cache d’aperçu", "Vorschau-Cache fehlgeschlagen", "Ошибка кэша предпросмотра", "Cache anteprima non riuscita", "Error de caché de vista previa", "فشل تخزين المعاينة"),
+    "process_start_failed": ("下载进程启动失败", "Download process failed to start", "ダウンロード処理を開始できません", "다운로드 프로세스 시작 실패", "Impossible de démarrer le téléchargement", "Downloadprozess konnte nicht starten", "Не удалось запустить загрузку", "Impossibile avviare il download", "No se pudo iniciar la descarga", "فشل بدء عملية التنزيل"),
+    "update_in_progress_message": ("下载引擎正在检查或更新，请完成后再退出。", "The downloader engine is being checked or updated. Wait before exiting.", "エンジンの確認または更新中です。完了後に終了してください。", "다운로드 엔진을 확인하거나 업데이트하는 중입니다. 완료 후 종료하세요.", "Le moteur est en cours de vérification ou de mise à jour. Attendez avant de quitter.", "Downloader wird geprüft oder aktualisiert. Bitte vor dem Beenden warten.", "Идёт проверка или обновление движка. Дождитесь завершения.", "Il motore è in verifica o aggiornamento. Attendi prima di uscire.", "El motor se está comprobando o actualizando. Espera antes de salir.", "جارٍ فحص محرك التنزيل أو تحديثه. انتظر قبل الخروج."),
+    "startup_failed_title": ("启动失败", "Startup failed", "起動失敗", "시작 실패", "Échec du démarrage", "Start fehlgeschlagen", "Ошибка запуска", "Avvio non riuscito", "Error de inicio", "فشل التشغيل"),
+    "startup_failed_message": ("程序初始化失败，详细信息已写入 ytdl_startup_error.log。\n\n{value}", "Initialization failed. Details were written to ytdl_startup_error.log.\n\n{value}", "初期化に失敗しました。詳細は ytdl_startup_error.log に保存されました。\n\n{value}", "초기화에 실패했습니다. 자세한 내용은 ytdl_startup_error.log에 저장되었습니다.\n\n{value}", "Échec de l’initialisation. Détails dans ytdl_startup_error.log.\n\n{value}", "Initialisierung fehlgeschlagen. Details stehen in ytdl_startup_error.log.\n\n{value}", "Ошибка инициализации. Подробности записаны в ytdl_startup_error.log.\n\n{value}", "Inizializzazione non riuscita. Dettagli in ytdl_startup_error.log.\n\n{value}", "Falló la inicialización. Detalles en ytdl_startup_error.log.\n\n{value}", "فشل التهيئة. تم حفظ التفاصيل في ytdl_startup_error.log.\n\n{value}"),
+    "time_format_error": ("请使用 HH:MM:SS 或 MM:SS 格式", "Use HH:MM:SS or MM:SS format", "HH:MM:SS または MM:SS 形式を使用してください", "HH:MM:SS 또는 MM:SS 형식을 사용하세요", "Utilisez le format HH:MM:SS ou MM:SS", "Format HH:MM:SS oder MM:SS verwenden", "Используйте формат HH:MM:SS или MM:SS", "Usa il formato HH:MM:SS o MM:SS", "Usa el formato HH:MM:SS o MM:SS", "استخدم تنسيق HH:MM:SS أو MM:SS"),
+    "engine_version_read_failed": ("无法读取 yt-dlp 版本", "Could not read the yt-dlp version", "yt-dlp のバージョンを取得できません", "yt-dlp 버전을 읽을 수 없습니다", "Impossible de lire la version de yt-dlp", "yt-dlp-Version konnte nicht gelesen werden", "Не удалось прочитать версию yt-dlp", "Impossibile leggere la versione di yt-dlp", "No se pudo leer la versión de yt-dlp", "تعذرت قراءة إصدار yt-dlp"),
+    "engine_asset_missing": ("最新版本中未找到 yt-dlp.exe", "The latest release does not contain yt-dlp.exe", "最新リリースに yt-dlp.exe がありません", "최신 릴리스에 yt-dlp.exe가 없습니다", "La dernière version ne contient pas yt-dlp.exe", "Die neueste Version enthält keine yt-dlp.exe", "В последнем выпуске нет yt-dlp.exe", "L’ultima versione non contiene yt-dlp.exe", "La última versión no contiene yt-dlp.exe", "لا يحتوي أحدث إصدار على yt-dlp.exe"),
+    "engine_validation_failed": ("新版 yt-dlp 验证失败", "The new yt-dlp executable failed validation", "新しい yt-dlp の検証に失敗しました", "새 yt-dlp 실행 파일 검증에 실패했습니다", "La validation du nouveau yt-dlp a échoué", "Die neue yt-dlp-Datei konnte nicht validiert werden", "Не удалось проверить новый файл yt-dlp", "La verifica del nuovo yt-dlp non è riuscita", "Falló la validación del nuevo yt-dlp", "فشل التحقق من ملف yt-dlp الجديد"),
 }
 
 
@@ -120,6 +205,49 @@ def bundled_path(name):
     return bundled if bundled.exists() else runtime_dir() / name
 
 
+def engine_path():
+    external = runtime_dir() / "yt_dlp.exe"
+    return external if external.exists() else bundled_path("yt_dlp.exe")
+
+
+def preview_cache_dir():
+    base = Path(os.environ.get("LOCALAPPDATA") or tempfile.gettempdir())
+    return base / ORG_NAME / APP_NAME.replace(" ", "") / "preview-cache"
+
+
+def select_preview_format(info):
+    progressive = [
+        fmt for fmt in (info or {}).get("formats", [])
+        if is_direct_media_format(fmt)
+        and fmt.get("format_id")
+        and fmt.get("vcodec") not in (None, "none", "images")
+        and fmt.get("acodec") not in (None, "none")
+    ]
+    pool = [fmt for fmt in progressive if fmt.get("ext") == "mp4"] or progressive
+    if not pool:
+        pool = [
+            fmt for fmt in (info or {}).get("formats", [])
+            if is_direct_media_format(fmt)
+            and fmt.get("format_id")
+            and fmt.get("vcodec") not in (None, "none", "images")
+        ]
+    if not pool:
+        return None
+    h264_pool = [
+        fmt for fmt in pool
+        if str(fmt.get("vcodec") or "").lower().startswith(("avc", "h264"))
+    ]
+    if h264_pool:
+        pool = h264_pool
+
+    def rank(fmt):
+        height = int(fmt.get("height") or 0)
+        bitrate = float(fmt.get("tbr") or float("inf"))
+        return (height > 720, abs(height - 480), bitrate)
+
+    return min(pool, key=rank)
+
+
 def cookie_path():
     path = runtime_dir() / COOKIE_FILE
     return path if path.exists() else None
@@ -137,13 +265,13 @@ def is_supported_url(url):
 
 def human_size(value):
     if not value:
-        return "未知"
+        return tr("unknown")
     size = float(value)
     for unit in ("B", "KB", "MB", "GB", "TB"):
         if size < 1024 or unit == "TB":
             return f"{size:.1f} {unit}"
         size /= 1024
-    return "未知"
+    return tr("unknown")
 
 
 def seconds_text(seconds):
@@ -183,7 +311,7 @@ def strip_time_suffix(name):
 def parse_time(value):
     parts = str(value or "").strip().split(":")
     if not parts or len(parts) > 3 or any(not p.isdigit() for p in parts):
-        raise ValueError("请使用 HH:MM:SS 或 MM:SS 格式")
+        raise ValueError(tr("time_format_error"))
     total = 0
     for part in parts:
         total = total * 60 + int(part)
@@ -192,7 +320,7 @@ def parse_time(value):
 
 def estimated_size(fmt, duration, audio_size=0):
     size = estimated_size_bytes(fmt, duration, audio_size)
-    return human_size(size) if size else "未知"
+    return human_size(size) if size else tr("unknown")
 
 
 def estimated_size_bytes(fmt, duration, audio_size=0):
@@ -215,10 +343,10 @@ def format_label(fmt, duration, audio_size):
     ext = (fmt.get("ext") or "?").upper()
     codec = codec_label(fmt.get("vcodec"))
     display_height = quality_height(fmt)
-    resolution = f"{display_height}p" if display_height else (fmt.get("resolution") or "未知分辨率")
+    resolution = f"{display_height}p" if display_height else (fmt.get("resolution") or tr("unknown_resolution"))
     if width and height:
         resolution += f" ({width}×{height})"
-    fps_text = f"{fps:g}fps" if fps else "帧率未知"
+    fps_text = f"{fps:g}fps" if fps else tr("unknown_fps")
     audio = fmt.get("acodec") not in (None, "none")
     size = estimated_size(fmt, duration, 0 if audio else audio_size)
     bitrate = fmt.get("tbr") or fmt.get("vbr")
@@ -254,7 +382,14 @@ def is_direct_media_format(fmt):
 
 
 def default_format_key(fmt):
-    return (quality_height(fmt), fmt.get("fps") or 0, int(str(fmt.get("ext", "")).lower() == "mp4"), fmt.get("tbr") or 0)
+    ext = str(fmt.get("ext") or "").lower()
+    return (
+        quality_height(fmt),
+        int(ext == "mp4"),
+        int(ext == "webm"),
+        fmt.get("fps") or 0,
+        fmt.get("tbr") or 0,
+    )
 
 
 class InfoWorker(QThread):
@@ -267,9 +402,9 @@ class InfoWorker(QThread):
 
     def run(self):
         try:
-            engine = bundled_path("yt_dlp.exe")
+            engine = engine_path()
             if not engine.exists():
-                raise RuntimeError("未找到下载引擎 yt_dlp.exe")
+                raise RuntimeError(tr("engine_missing"))
             command = [str(engine), "--dump-single-json", "--skip-download", "--no-playlist", "--no-warnings"]
             cookie = cookie_path()
             if cookie:
@@ -283,7 +418,7 @@ class InfoWorker(QThread):
                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
             )
             if completed.returncode:
-                raise RuntimeError(completed.stderr.strip() or "视频信息解析失败")
+                raise RuntimeError(completed.stderr.strip() or tr("info_parse_failed"))
             info = json.loads(completed.stdout)
             thumb = b""
             if info.get("thumbnail"):
@@ -293,6 +428,166 @@ class InfoWorker(QThread):
             self.result.emit(info, thumb)
         except Exception as exc:
             self.failed.emit(str(exc))
+
+
+class PreviewCacheWorker(QThread):
+    ready = pyqtSignal(str)
+    failed = pyqtSignal(str)
+
+    def __init__(self, url, format_id, target):
+        super().__init__()
+        self.url = url
+        self.format_id = str(format_id)
+        self.target = Path(target)
+        self.process = None
+        self.stop_requested = False
+
+    def request_stop(self):
+        self.stop_requested = True
+        process = self.process
+        if process is not None and process.poll() is None:
+            try:
+                process.terminate()
+                process.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                try:
+                    process.kill()
+                except OSError:
+                    pass
+            except OSError:
+                pass
+
+    def clean_cache(self):
+        folder = self.target.parent
+        files = [item for item in folder.iterdir() if item.is_file() and ".part" not in item.name]
+        files.sort(key=lambda item: item.stat().st_mtime, reverse=True)
+        total = 0
+        for index, item in enumerate(files):
+            try:
+                size = item.stat().st_size
+            except OSError:
+                continue
+            total += size
+            if item == self.target:
+                continue
+            if index >= PREVIEW_CACHE_MAX_FILES or total > PREVIEW_CACHE_MAX_BYTES:
+                try:
+                    item.unlink(missing_ok=True)
+                except OSError:
+                    pass
+
+    def run(self):
+        try:
+            self.target.parent.mkdir(parents=True, exist_ok=True)
+            if self.target.exists() and self.target.stat().st_size > 0:
+                self.clean_cache()
+                self.ready.emit(str(self.target))
+                return
+            command = [
+                str(engine_path()), self.url, "--no-playlist", "--no-warnings", "--no-color",
+                "--continue", "--format", self.format_id, "--output", str(self.target),
+                "--retries", "2", "--fragment-retries", "2", "--socket-timeout", "20",
+            ]
+            cookie = cookie_path()
+            if cookie:
+                command += ["--cookies", str(cookie)]
+            self.process = subprocess.Popen(
+                command,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                text=True,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+            )
+            _stdout, stderr = self.process.communicate()
+            if self.stop_requested:
+                return
+            if self.process.returncode != 0 or not self.target.exists():
+                raise RuntimeError((stderr or tr("preview_cache_failed")).strip()[-500:])
+            self.clean_cache()
+            self.ready.emit(str(self.target))
+        except Exception as exc:
+            if not self.stop_requested:
+                self.failed.emit(str(exc))
+        finally:
+            self.process = None
+
+
+class EngineCheckWorker(QThread):
+    result = pyqtSignal(dict)
+    failed = pyqtSignal(str)
+
+    def run(self):
+        try:
+            current = subprocess.run(
+                [str(engine_path()), "--version"], capture_output=True, text=True, timeout=20,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+            )
+            if current.returncode:
+                raise RuntimeError(current.stderr.strip() or tr("engine_version_read_failed"))
+            response = requests.get(
+                "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest",
+                headers={"Accept": "application/vnd.github+json", "User-Agent": APP_NAME}, timeout=20,
+            )
+            response.raise_for_status()
+            release = response.json()
+            asset = next((item for item in release.get("assets", []) if item.get("name") == "yt-dlp.exe"), None)
+            if not asset or not asset.get("browser_download_url"):
+                raise RuntimeError(tr("engine_asset_missing"))
+            self.result.emit({
+                "current": current.stdout.strip(),
+                "latest": str(release.get("tag_name") or "").lstrip("v"),
+                "url": asset["browser_download_url"],
+            })
+        except Exception as exc:
+            self.failed.emit(str(exc))
+
+
+class EngineUpdateWorker(QThread):
+    succeeded = pyqtSignal(str)
+    failed = pyqtSignal(str)
+
+    def __init__(self, download_url, expected_version, parent=None):
+        super().__init__(parent)
+        self.download_url = download_url
+        self.expected_version = expected_version
+
+    def run(self):
+        target = runtime_dir() / "yt_dlp.exe"
+        backup = runtime_dir() / "yt_dlp.exe.backup"
+        temporary = runtime_dir() / "yt_dlp-update.exe"
+        replaced = False
+        try:
+            response = requests.get(self.download_url, stream=True, timeout=60)
+            response.raise_for_status()
+            with temporary.open("wb") as stream:
+                for chunk in response.iter_content(1024 * 1024):
+                    if chunk:
+                        stream.write(chunk)
+            validation = subprocess.run(
+                [str(temporary), "--version"], capture_output=True, text=True, timeout=30,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+            )
+            version = validation.stdout.strip()
+            if validation.returncode or not version:
+                raise RuntimeError(validation.stderr.strip() or tr("engine_validation_failed"))
+            source = target if target.exists() else engine_path()
+            if source.exists():
+                shutil.copy2(source, backup)
+            os.replace(temporary, target)
+            replaced = True
+            self.succeeded.emit(version or self.expected_version)
+        except Exception as exc:
+            if replaced and backup.exists():
+                try:
+                    shutil.copy2(backup, target)
+                except OSError:
+                    pass
+            self.failed.emit(str(exc))
+        finally:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 class LoadingSpinner(QWidget):
@@ -387,7 +682,9 @@ class AspectRatioContainer(QWidget):
 
 
 class RangeTimeline(QWidget):
+    seek_started = pyqtSignal()
     seek_requested = pyqtSignal(int)
+    seek_finished = pyqtSignal(int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -433,11 +730,20 @@ class RangeTimeline(QWidget):
         return int(ratio * self.duration)
 
     def mousePressEvent(self, event):
-        self.seek_requested.emit(self.value_from_x(event.position().x()))
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.seek_started.emit()
+            self.seek_requested.emit(self.value_from_x(event.position().x()))
+            event.accept()
 
     def mouseMoveEvent(self, event):
         if event.buttons() & Qt.MouseButton.LeftButton:
             self.seek_requested.emit(self.value_from_x(event.position().x()))
+            event.accept()
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.seek_finished.emit(self.value_from_x(event.position().x()))
+            event.accept()
 
     def paintEvent(self, _event):
         painter = QPainter(self)
@@ -467,6 +773,17 @@ class ClickableVideoWidget(QVideoWidget):
 
     def mousePressEvent(self, event):
         self.clicked.emit()
+        super().mousePressEvent(event)
+
+
+class ClickableLabel(QLabel):
+    clicked = pyqtSignal()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit()
+            event.accept()
+            return
         super().mousePressEvent(event)
 
 
@@ -622,11 +939,17 @@ class ChevronComboBox(QComboBox):
         self.dark_theme = False
         self.popup_frame = None
         self.popup_list = None
+        self.overlay_popup = False
+        self._suppress_popup_reopen = False
+        self._intentional_popup_hide = False
         self.arrow_button = ChevronButton(self)
         self.arrow_button.pressed.connect(self.toggle_popup)
         self.setItemDelegate(FlatItemDelegate(self))
         self.view().setFocusPolicy(Qt.FocusPolicy.NoFocus)
         QApplication.instance().installEventFilter(self)
+
+    def set_overlay_popup(self, enabled):
+        self.overlay_popup = bool(enabled)
 
     def set_scale(self, scale):
         self.current_scale = scale
@@ -654,20 +977,36 @@ class ChevronComboBox(QComboBox):
         self.arrow_button.raise_()
 
     def toggle_popup(self):
+        if self._suppress_popup_reopen:
+            self._suppress_popup_reopen = False
+            return
         if self.popup_frame is not None and self.popup_frame.isVisible():
             self.hidePopup()
         else:
             self.showPopup()
 
     def showPopup(self):
+        if self._suppress_popup_reopen:
+            self._suppress_popup_reopen = False
+            return
         if self.popup_frame is not None and self.popup_frame.isVisible():
             return
         host = self.window().centralWidget()
         if host is None:
             return
-        if self.popup_frame is None or self.popup_frame.parent() is not host:
-            self.popup_frame = QFrame(host)
+        popup_parent = self.window() if self.overlay_popup else host
+        if self.popup_frame is None or self.popup_frame.parent() is not popup_parent:
+            if self.popup_frame is not None:
+                self.popup_frame.deleteLater()
+            if self.overlay_popup:
+                flags = Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint
+                self.popup_frame = QFrame(popup_parent, flags)
+            else:
+                self.popup_frame = QFrame(popup_parent)
             self.popup_frame.setObjectName("comboPopup")
+            if self.overlay_popup:
+                self.popup_frame.setStyleSheet(self.window().styleSheet())
+            self.popup_frame.installEventFilter(self)
             popup_layout = QVBoxLayout(self.popup_frame)
             popup_layout.setContentsMargins(0, 0, 0, 0)
             popup_layout.setSpacing(0)
@@ -694,9 +1033,17 @@ class ChevronComboBox(QComboBox):
             Qt.ScrollBarPolicy.ScrollBarAlwaysOff if short_list
             else Qt.ScrollBarPolicy.ScrollBarAsNeeded
         )
-        position = self.mapTo(host, QPoint(0, self.height() - 1))
+        position = (
+            self.mapToGlobal(QPoint(0, self.height() - 1))
+            if self.overlay_popup else self.mapTo(host, QPoint(0, self.height() - 1))
+        )
         desired_height = min(max(1, self.count()), self.maxVisibleItems()) * row_height + 6
-        available_height = max(row_height + 2, host.height() - position.y())
+        if self.overlay_popup:
+            screen = QApplication.screenAt(position) or QApplication.primaryScreen()
+            available_bottom = screen.availableGeometry().bottom() if screen else position.y() + desired_height
+            available_height = max(row_height + 2, available_bottom - position.y() + 1)
+        else:
+            available_height = max(row_height + 2, host.height() - position.y())
         popup_height = min(desired_height, available_height)
         self.popup_frame.setGeometry(position.x(), position.y(), self.width(), popup_height)
         self.arrow_up = True
@@ -706,8 +1053,10 @@ class ChevronComboBox(QComboBox):
         self.update()
 
     def hidePopup(self):
+        self._intentional_popup_hide = True
         if self.popup_frame is not None:
             self.popup_frame.hide()
+        self._intentional_popup_hide = False
         self.arrow_up = False
         self.arrow_button.set_direction(False)
         self.update()
@@ -735,6 +1084,15 @@ class ChevronComboBox(QComboBox):
         super().mouseReleaseEvent(event)
 
     def eventFilter(self, watched, event):
+        if watched is self.popup_frame and event.type() == QEvent.Type.Hide:
+            if self.overlay_popup and not self._intentional_popup_hide:
+                global_position = QCursor.pos()
+                over_combo = self.rect().contains(self.mapFromGlobal(global_position))
+                left_pressed = bool(QApplication.mouseButtons() & Qt.MouseButton.LeftButton)
+                self._suppress_popup_reopen = over_combo and left_pressed
+            self.arrow_up = False
+            self.arrow_button.set_direction(False)
+            self.update()
         if (
             self.popup_frame is not None
             and self.popup_frame.isVisible()
@@ -743,6 +1101,9 @@ class ChevronComboBox(QComboBox):
             global_position = event.globalPosition().toPoint()
             inside_combo = self.rect().contains(self.mapFromGlobal(global_position))
             inside_popup = self.popup_frame.rect().contains(self.popup_frame.mapFromGlobal(global_position))
+            if self.overlay_popup and inside_combo:
+                self.hidePopup()
+                return True
             if not inside_combo and not inside_popup:
                 self.hidePopup()
         return super().eventFilter(watched, event)
@@ -755,6 +1116,9 @@ class DownloadManager(QWidget):
     progress_changed = pyqtSignal(float, str, str, str)
     state_changed = pyqtSignal(str, str)
     finished = pyqtSignal(bool)
+    queue_requested = pyqtSignal()
+    transient_failure = pyqtSignal(str)
+    format_unavailable = pyqtSignal()
     PROGRESS_RE = re.compile(
         r"__YTDL__\|(?P<format_id>[^|]*)\|(?P<status>[^|]*)\|(?P<downloaded>[^|]*)"
         r"\|(?P<total>[^|]*)\|(?P<estimate>[^|]*)"
@@ -769,6 +1133,12 @@ class DownloadManager(QWidget):
         self.merge_ext, self.download_cover, self.section = merge_ext, cover, section
         self.overwrite = overwrite
         self.state, self.process, self.output_log, self.stop_reason = "waiting", None, "", None
+        self.auto_retry_count = 0
+        self._attempt_resolved = False
+        self._silent_restart = False
+        self.retry_timer = QTimer(self)
+        self.retry_timer.setSingleShot(True)
+        self.retry_timer.timeout.connect(self.start)
         self.last_percent = 0.0
         self.output_buffer = ""
         self.ffmpeg_speed = 0.0
@@ -789,11 +1159,11 @@ class DownloadManager(QWidget):
         } if output_path.parent.exists() else set()
 
     def command(self):
-        exe = bundled_path("yt_dlp.exe")
+        exe = engine_path()
         args = [self.url, "--no-playlist", "--continue", "--newline", "--no-color", "--no-warnings",
-                "--format", self.selector, "--output", self.output_path, "--concurrent-fragments", "5",
-                "--retries", "infinite", "--fragment-retries", "infinite", "--file-access-retries", "infinite",
-                "--retry-sleep", "5", "--socket-timeout", "20",
+                "--format", self.selector, "--output", self.output_path, "--concurrent-fragments", "3",
+                "--retries", "0", "--fragment-retries", "0", "--file-access-retries", "0",
+                "--extractor-retries", "2", "--socket-timeout", "20",
                 "--progress-template", "download:__YTDL__|%(info_dict.format_id)s|%(progress.status)s|%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s"]
         if self.overwrite:
             args += ["--force-overwrites"]
@@ -817,12 +1187,19 @@ class DownloadManager(QWidget):
     def start(self):
         if self.process and self.process.state() != QProcess.ProcessState.NotRunning:
             return
+        self.retry_timer.stop()
+        if self.process is not None:
+            self.process.deleteLater()
+            self.process = None
         exe, args = self.command()
         if not exe.exists():
             self.state = "failed"
-            self.state_changed.emit("failed", "未找到下载引擎 yt_dlp.exe")
+            self.state_changed.emit("failed", tr("engine_missing"))
             self.finished.emit(False)
             return
+        self.output_log = ""
+        self.output_buffer = ""
+        self._attempt_resolved = False
         self.process = QProcess(self)
         self.process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
         self.process.readyReadStandardOutput.connect(self.read_output)
@@ -832,7 +1209,10 @@ class DownloadManager(QWidget):
         self.last_speed_sample_time = time.monotonic()
         self.last_speed_sample_bytes = sum(self.component_downloaded.values())
         self.last_progress_emit = 0.0
-        self.state_changed.emit("running", tr("connecting"))
+        silent_restart = self._silent_restart
+        self._silent_restart = False
+        if not silent_restart:
+            self.state_changed.emit("running", tr("connecting"))
         self.process.start(str(exe), args)
 
     def resolve_progress_component(self, reported_id, reported_total):
@@ -953,27 +1333,68 @@ class DownloadManager(QWidget):
                 self.progress_changed.emit(self.last_percent, tr("muxing"), "", tr("muxing_detail"))
 
     def process_finished(self, exit_code, _status):
+        if self.sender() is not None and self.sender() is not self.process:
+            return
+        if self._attempt_resolved:
+            return
+        self._attempt_resolved = True
         if self.stop_reason == "pause":
             self.state = "paused"
-            self.state_changed.emit("paused", "已暂停，可继续断点下载")
+            self.state_changed.emit("paused", tr("paused_state"))
             return
         if self.stop_reason == "clear":
             self.state = "cleared"
             return
-        success = exit_code == 0
-        self.state = "finished" if success else "failed"
-        self.state_changed.emit(self.state, tr("finished") if success else self.last_error())
-        self.finished.emit(success)
+        if exit_code == 0:
+            self.auto_retry_count = 0
+            self.state = "finished"
+            self.state_changed.emit("finished", tr("finished"))
+            self.finished.emit(True)
+            return
+        self.handle_attempt_failure(self.last_error())
 
     def process_error(self, _error):
-        if not self.stop_reason:
-            self.state = "failed"
-            self.state_changed.emit("failed", self.process.errorString())
+        if self.stop_reason or self._attempt_resolved:
+            return
+        if self.sender() is not None and self.sender() is not self.process:
+            return
+        self._attempt_resolved = True
+        detail = self.process.errorString() if self.process is not None else tr("process_start_failed")
+        if self.process is not None and self.process.state() != QProcess.ProcessState.NotRunning:
+            self.process.kill()
+        self.handle_attempt_failure(detail)
+
+    def is_retryable_failure(self, detail):
+        message = str(detail or "").lower()
+        permanent_errors = (
+            "no space left", "disk full", "permission denied", "access is denied",
+            "requested format is not available", "unsupported url", "invalid url",
+            "unable to open for writing", "file name too long",
+        )
+        return not any(marker in message for marker in permanent_errors)
+
+    def handle_attempt_failure(self, detail):
+        message = str(detail or "")
+        lowered = message.lower()
+        if "requested format is not available" in lowered:
+            self.format_unavailable.emit()
+        if any(marker in lowered for marker in ("403", "429", "timed out", "connection reset", "remote end closed")):
+            self.transient_failure.emit(message)
+        if self.is_retryable_failure(detail) and self.auto_retry_count < MAX_AUTO_RETRIES:
+            delay = AUTO_RETRY_DELAYS_MS[min(self.auto_retry_count, len(AUTO_RETRY_DELAYS_MS) - 1)]
+            self.auto_retry_count += 1
+            self.state = "running"
+            self._silent_restart = True
+            self.retry_timer.start(delay)
+            return
+        self.state = "failed"
+        self.state_changed.emit("failed", detail or self.last_error())
+        self.finished.emit(False)
 
     def last_error(self):
         lines = [x.strip() for x in self.output_log.splitlines() if x.strip()]
         errors = [x for x in lines if "ERROR:" in x]
-        return (errors[-1] if errors else (lines[-1] if lines else "下载进程异常结束"))[:260]
+        return (errors[-1] if errors else (lines[-1] if lines else tr("process_failed")))[:260]
 
     def stop_process(self, reason):
         if self.process and self.process.state() != QProcess.ProcessState.NotRunning:
@@ -987,12 +1408,31 @@ class DownloadManager(QWidget):
 
     def pause(self):
         if self.state == "running":
+            if self.retry_timer.isActive():
+                self.retry_timer.stop()
+                self._silent_restart = False
+                self.state = "paused"
+                self.state_changed.emit("paused", tr("paused_state"))
+                return
             self.stop_process("pause")
-            self.state_changed.emit("running", "正在安全暂停...")
+            self.state_changed.emit("running", tr("pausing_state"))
 
     def resume(self):
         if self.state == "paused":
-            self.start()
+            self.state = "waiting"
+            self.state_changed.emit("waiting", tr("waiting"))
+            self.queue_requested.emit()
+
+    def retry(self):
+        if self.state != "failed":
+            return
+        self.retry_timer.stop()
+        self.auto_retry_count = 0
+        self.stop_reason = None
+        self._silent_restart = False
+        self.state = "waiting"
+        self.state_changed.emit("waiting", tr("waiting"))
+        self.queue_requested.emit()
 
     def open_folder(self):
         output = Path(self.output_path)
@@ -1000,6 +1440,7 @@ class DownloadManager(QWidget):
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
 
     def clear_files(self):
+        self.retry_timer.stop()
         if self.process and self.process.state() != QProcess.ProcessState.NotRunning:
             self.stop_reason = "clear"
             self.process.kill()
@@ -1027,6 +1468,7 @@ class DownloadManager(QWidget):
         self.state = "cleared"
 
     def hide_and_discard_cache(self):
+        self.retry_timer.stop()
         if self.process and self.process.state() != QProcess.ProcessState.NotRunning:
             self.stop_reason = "clear"
             self.process.kill()
@@ -1088,11 +1530,32 @@ class DownloadTaskWidget(QFrame):
         self.name_label.setToolTip(manager.output_path)
         self.name_label.setStyleSheet("font-weight:600;")
         self.last_state = manager.state
-        self.detail_label = QLabel(tr("waiting"))
+        self.detail_label = ClickableLabel(tr("waiting"))
         self.detail_label.setObjectName("taskDetail")
+        self.detail_label.clicked.connect(self.toggle_error_details)
         text.addWidget(self.name_label)
         text.addWidget(self.detail_label)
         top.addLayout(text, 1)
+        self.copy_link_btn = QPushButton()
+        self.open_video_btn = QPushButton()
+        self.copy_link_btn.setObjectName("taskIcon")
+        self.open_video_btn.setObjectName("taskIcon")
+        self.copy_link_btn.setToolTip(tr("copy_link"))
+        self.open_video_btn.setToolTip(tr("open_video"))
+        if qta is not None:
+            try:
+                self.copy_link_btn.setIcon(qta.icon("fa5s.copy", color=ACCENT))
+                self.open_video_btn.setIcon(qta.icon("fa5s.external-link-alt", color=ACCENT))
+            except Exception:
+                self.copy_link_btn.setText("▣")
+                self.open_video_btn.setText("↗")
+        else:
+            self.copy_link_btn.setText("▣")
+            self.open_video_btn.setText("↗")
+        self.copy_link_btn.clicked.connect(self.copy_video_link)
+        self.open_video_btn.clicked.connect(self.open_video_link)
+        top.addWidget(self.copy_link_btn)
+        top.addWidget(self.open_video_btn)
         root.addLayout(top)
         row = QHBoxLayout()
         self.progress = QProgressBar()
@@ -1107,30 +1570,52 @@ class DownloadTaskWidget(QFrame):
         buttons = QHBoxLayout()
         buttons.setSpacing(5)
         self.pause_btn = QPushButton(tr("pause"))
+        self.retry_btn = QPushButton(tr("retry"))
         self.open_btn = QPushButton(tr("open_folder"))
         self.clear_btn = QPushButton(tr("clear"))
         self.hide_btn = QPushButton(tr("hide_task"))
-        for button in (self.pause_btn, self.open_btn, self.clear_btn, self.hide_btn):
+        for button in (self.pause_btn, self.retry_btn, self.open_btn, self.clear_btn, self.hide_btn):
             button.setObjectName("taskSmall")
             button.setFixedHeight(25)
+        self.retry_btn.hide()
         self.clear_btn.setObjectName("danger")
         self.pause_btn.clicked.connect(self.pause_or_resume)
+        self.retry_btn.clicked.connect(manager.retry)
         self.open_btn.clicked.connect(manager.open_folder)
         self.clear_btn.clicked.connect(self.request_clear)
         self.hide_btn.clicked.connect(self.request_hide)
         buttons.addWidget(self.pause_btn)
+        buttons.addWidget(self.retry_btn)
         buttons.addWidget(self.open_btn)
         buttons.addWidget(self.clear_btn)
         buttons.addStretch()
         buttons.addWidget(self.hide_btn)
         root.addLayout(buttons)
+        self.error_panel = QWidget()
+        error_layout = QHBoxLayout(self.error_panel)
+        error_layout.setContentsMargins(0, 2, 0, 0)
+        error_layout.setSpacing(5)
+        self.error_text = QLabel()
+        self.error_text.setObjectName("errorDetail")
+        self.error_text.setWordWrap(True)
+        self.error_text.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.copy_error_btn = QPushButton(tr("copy_error"))
+        self.copy_error_btn.setObjectName("taskSmall")
+        self.copy_error_btn.clicked.connect(self.copy_error)
+        error_layout.addWidget(self.error_text, 1)
+        error_layout.addWidget(self.copy_error_btn, 0, Qt.AlignmentFlag.AlignTop)
+        self.error_panel.hide()
+        root.addWidget(self.error_panel)
+        self.error_detail = ""
+        self.error_expanded = False
         manager.progress_changed.connect(self.update_progress)
         manager.state_changed.connect(self.update_state)
         manager.finished.connect(self.download_finished)
         self.set_scale(1.0)
 
     def set_scale(self, scale):
-        self.setMaximumHeight(max(86, round(116 * scale)))
+        self.current_scale = scale
+        self.update_card_height()
         self.root_layout.setContentsMargins(
             round(10 * scale), round(7 * scale), round(10 * scale), round(7 * scale)
         )
@@ -1142,21 +1627,45 @@ class DownloadTaskWidget(QFrame):
                 self.task_cover.size(), Qt.AspectRatioMode.KeepAspectRatioByExpanding,
                 Qt.TransformationMode.SmoothTransformation,
             ))
-        for button in (self.pause_btn, self.open_btn, self.clear_btn, self.hide_btn):
+        icon_size = max(20, round(25 * scale))
+        self.copy_link_btn.setFixedSize(icon_size, icon_size)
+        self.open_video_btn.setFixedSize(icon_size, icon_size)
+        self.copy_link_btn.setIconSize(QSize(max(11, round(13 * scale)), max(11, round(13 * scale))))
+        self.open_video_btn.setIconSize(QSize(max(11, round(13 * scale)), max(11, round(13 * scale))))
+        for button in (self.pause_btn, self.retry_btn, self.open_btn, self.clear_btn, self.hide_btn):
             button.setFixedHeight(max(20, round(25 * scale)))
+        self.copy_error_btn.setFixedHeight(max(20, round(25 * scale)))
 
     def update_progress(self, percent, speed, eta, size):
         self.progress.setValue(int(max(0, min(100, percent)) * 10))
         self.percent_label.setText(f"{percent:.1f}%")
         parts = [x for x in (size, speed, tr("remaining", value=eta) if eta and eta != "NA" else "") if x and x != "NA"]
-        self.detail_label.setText(" · ".join(parts) or tr("downloading"))
+        detail = " · ".join(parts) or tr("downloading")
+        self.detail_label.setText(detail)
+        self.detail_label.setToolTip(detail)
 
     def update_state(self, state, detail):
         self.last_state = state
         self.detail_label.setText(detail or state)
+        self.detail_label.setToolTip(detail or state)
         self.pause_btn.setText(tr("resume") if state == "paused" else tr("pause"))
-        if state in ("finished", "failed", "cleared"):
-            self.pause_btn.setEnabled(False)
+        self.pause_btn.setEnabled(state in ("running", "paused"))
+        self.retry_btn.setVisible(state == "failed")
+        self.detail_label.setCursor(
+            Qt.CursorShape.PointingHandCursor if state == "failed" else Qt.CursorShape.ArrowCursor
+        )
+        if state == "failed":
+            self.error_detail = detail or state
+            self.detail_label.setToolTip(f"{tr('error_details')}\n{self.error_detail}")
+        else:
+            self.error_detail = ""
+            self.error_expanded = False
+            self.error_panel.hide()
+            self.update_card_height()
+        self.setProperty("failed", state == "failed")
+        self.style().unpolish(self)
+        self.style().polish(self)
+        self.update()
 
     def download_finished(self, success):
         if success:
@@ -1166,18 +1675,45 @@ class DownloadTaskWidget(QFrame):
     def pause_or_resume(self):
         self.manager.resume() if self.manager.state == "paused" else self.manager.pause()
 
+    def copy_video_link(self):
+        QApplication.clipboard().setText(self.manager.url)
+
+    def open_video_link(self):
+        QDesktopServices.openUrl(QUrl(self.manager.url))
+
+    def update_card_height(self):
+        scale = getattr(self, "current_scale", 1.0)
+        height = 210 if getattr(self, "error_expanded", False) else 116
+        self.setMaximumHeight(max(86, round(height * scale)))
+
+    def toggle_error_details(self):
+        if self.manager.state != "failed" or not self.error_detail:
+            return
+        self.error_expanded = not self.error_expanded
+        self.error_text.setText(self.error_detail)
+        self.error_panel.setVisible(self.error_expanded)
+        self.update_card_height()
+
+    def copy_error(self):
+        if self.error_detail:
+            QApplication.clipboard().setText(self.error_detail)
+
     def retranslate_ui(self):
         self.pause_btn.setText(tr("resume") if self.manager.state == "paused" else tr("pause"))
+        self.retry_btn.setText(tr("retry"))
         self.open_btn.setText(tr("open_folder"))
         self.clear_btn.setText(tr("clear"))
         self.hide_btn.setText(tr("hide_task"))
+        self.copy_link_btn.setToolTip(tr("copy_link"))
+        self.open_video_btn.setToolTip(tr("open_video"))
+        self.copy_error_btn.setText(tr("copy_error"))
         if self.manager.state == "waiting":
             self.detail_label.setText(tr("waiting"))
         elif self.manager.state == "finished":
             self.detail_label.setText(tr("finished"))
 
     def request_clear(self):
-        answer = QMessageBox.question(self, "清除任务", "将停止任务，并删除成品、未完成文件及相关临时文件。是否继续？",
+        answer = QMessageBox.question(self, tr("clear_task_title"), tr("clear_task_message"),
                                       QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
         if answer == QMessageBox.StandardButton.Yes:
             self.manager.clear_files()
@@ -1186,7 +1722,7 @@ class DownloadTaskWidget(QFrame):
     def request_hide(self):
         if self.manager.state in ("running", "paused"):
             answer = QMessageBox.question(
-                self, "隐藏任务", "将停止任务并删除未完成缓存，但不会删除已经保存好的文件。是否继续？",
+                self, tr("hide_task_title"), tr("hide_task_message"),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No,
             )
             if answer != QMessageBox.StandardButton.Yes:
@@ -1214,6 +1750,18 @@ class YoutubeDownloader(QMainWindow):
         self._aspect_timer.setSingleShot(True)
         self._aspect_timer.timeout.connect(self.apply_pending_aspect_size)
         self.dark_mode = self.settings.value("theme", "light") == "dark"
+        saved_concurrency = int(self.settings.value("concurrent_downloads", DEFAULT_CONCURRENT_DOWNLOADS))
+        self.max_concurrent_downloads = max(1, min(MAX_CONCURRENT_DOWNLOADS, saved_concurrency))
+        self.adaptive_concurrency_cap = None
+        self.recent_transient_failures = []
+        self.adaptive_restore_timer = QTimer(self)
+        self.adaptive_restore_timer.setSingleShot(True)
+        self.adaptive_restore_timer.timeout.connect(self.restore_adaptive_concurrency)
+        self.preview_cache_worker = None
+        self.preview_cache_path = None
+        self.preview_cache_error = ""
+        self.engine_check_worker = None
+        self.engine_update_worker = None
         self.section_labels = []
         self.setWindowTitle(APP_NAME)
         app_icon = bundled_path("icon.ico")
@@ -1222,6 +1770,21 @@ class YoutubeDownloader(QMainWindow):
         self.resize(1020, 830)
         self.setMinimumSize(860, 700)
         self.build_ui()
+        self.preview_fps = 30.0
+        self.preview_duration_ms = 1
+        self.preview_target_ms = 0
+        self.preview_last_position_ms = 0
+        self.preview_seek_inflight = False
+        self.preview_resume_after_seek = False
+        self.preview_scrubbing = False
+        self.preview_seek_retry_count = 0
+        self.preview_seek_timer = QTimer(self)
+        self.preview_seek_timer.setSingleShot(True)
+        self.preview_seek_timer.setInterval(70)
+        self.preview_seek_timer.timeout.connect(self.commit_preview_seek)
+        self.preview_spinner_guard = QTimer(self)
+        self.preview_spinner_guard.setSingleShot(True)
+        self.preview_spinner_guard.timeout.connect(self.preview_spinner.stop)
         self.apply_responsive_scale(force=True)
 
     def section_label(self, text):
@@ -1241,6 +1804,7 @@ class YoutubeDownloader(QMainWindow):
         standard_icons = {
             "fa5s.play": QStyle.StandardPixmap.SP_MediaPlay,
             "fa5s.pause": QStyle.StandardPixmap.SP_MediaPause,
+            "fa5s.sync-alt": QStyle.StandardPixmap.SP_BrowserReload,
         }
         return self.style().standardIcon(standard_icons.get(name, QStyle.StandardPixmap.SP_FileIcon))
 
@@ -1261,6 +1825,10 @@ class YoutubeDownloader(QMainWindow):
         for button in self.clip_control_buttons:
             button.setFixedSize(width, height)
             button.setIconSize(QSize(icon_size, icon_size))
+        speed_width = max(48, round(52 * scale))
+        speed_height = max(24, round(26 * scale))
+        self.half_speed_btn.setFixedSize(speed_width, speed_height)
+        self.double_speed_btn.setFixedSize(speed_width, speed_height)
 
     def build_ui(self):
         root = QWidget()
@@ -1281,10 +1849,18 @@ class YoutubeDownloader(QMainWindow):
         brand.addWidget(subtitle)
         header.addLayout(brand)
         header.addStretch()
+        self.engine_update_btn = QPushButton()
+        self.engine_update_btn.setObjectName("headerIcon")
+        self.engine_update_btn.setIcon(self._button_icon("fa5s.sync-alt"))
+        self.engine_update_btn.setToolTip(tr("check_engine_update"))
+        self.engine_update_btn.clicked.connect(self.check_engine_update)
+        header.addWidget(self.engine_update_btn, 0, Qt.AlignmentFlag.AlignTop)
         self.language_btn = LanguageButton()
         self.language_btn.setToolTip(tr("language_tip"))
         self.language_btn.clicked.connect(self.show_language_menu)
         self.language_menu = QMenu(self)
+        self._suppress_language_menu_reopen = False
+        self.language_menu.aboutToHide.connect(self.language_menu_about_to_hide)
         self.language_actions = {}
         for code in LANGUAGE_CODES:
             action = QAction(LANGUAGE_NAMES[code], self.language_menu)
@@ -1381,6 +1957,7 @@ class YoutubeDownloader(QMainWindow):
         right.addWidget(self.range_label)
         right.addStretch()
         self.audio_combo = ChevronComboBox()
+        self.audio_combo.set_overlay_popup(True)
         self.audio_combo.addItem(tr("download_audio"), None)
         self.audio_combo.setEnabled(False)
         self.audio_combo.setMaxVisibleItems(8)
@@ -1405,9 +1982,21 @@ class YoutubeDownloader(QMainWindow):
         task_box.setContentsMargins(14, 12, 14, 12)
         task_header = QHBoxLayout()
         self.tasks_section = self.section_label(tr("tasks"))
+        self.tasks_section.setProperty("plain", True)
         task_header.addWidget(self.tasks_section)
         task_header.addStretch()
-        self.task_count = QLabel("0 / 5")
+        self.concurrent_label = QLabel(tr("concurrent_downloads"))
+        self.concurrent_label.setObjectName("subtitle")
+        self.concurrency_combo = ChevronComboBox()
+        self.concurrency_combo.setMaxVisibleItems(MAX_CONCURRENT_DOWNLOADS)
+        for value in range(1, MAX_CONCURRENT_DOWNLOADS + 1):
+            self.concurrency_combo.addItem(str(value), value)
+        self.concurrency_combo.setCurrentIndex(self.max_concurrent_downloads - 1)
+        self.concurrency_combo.setFixedWidth(58)
+        self.concurrency_combo.currentIndexChanged.connect(self.concurrency_changed)
+        task_header.addWidget(self.concurrent_label)
+        task_header.addWidget(self.concurrency_combo)
+        self.task_count = QLabel(f"0/{MAX_TASKS}")
         self.task_count.setObjectName("subtitle")
         task_header.addWidget(self.task_count)
         task_box.addLayout(task_header)
@@ -1432,8 +2021,21 @@ class YoutubeDownloader(QMainWindow):
         clip_box.setSpacing(7)
         clip_header = QHBoxLayout()
         self.clip_section = self.section_label(tr("clip_panel"))
+        self.clip_section.setProperty("plain", True)
         clip_header.addWidget(self.clip_section)
         clip_header.addStretch()
+        self.half_speed_btn = QPushButton("0.5×")
+        self.double_speed_btn = QPushButton("2×")
+        self.half_speed_btn.setObjectName("speedToggle")
+        self.double_speed_btn.setObjectName("speedToggle")
+        self.half_speed_btn.setCheckable(True)
+        self.double_speed_btn.setCheckable(True)
+        self.half_speed_btn.setToolTip(tr("half_speed"))
+        self.double_speed_btn.setToolTip(tr("double_speed"))
+        self.half_speed_btn.toggled.connect(lambda checked: self.toggle_preview_rate(0.5, checked))
+        self.double_speed_btn.toggled.connect(lambda checked: self.toggle_preview_rate(2.0, checked))
+        clip_header.addWidget(self.half_speed_btn)
+        clip_header.addWidget(self.double_speed_btn)
         self.preview_spinner = LoadingSpinner()
         clip_header.addWidget(self.preview_spinner)
         self.clip_time_label = QLabel("00:00.000 / 00:00.000")
@@ -1448,7 +2050,9 @@ class YoutubeDownloader(QMainWindow):
         self.clip_video_frame = AspectRatioContainer(self.clip_video)
         clip_box.addWidget(self.clip_video_frame, 1)
         self.clip_timeline = RangeTimeline()
+        self.clip_timeline.seek_started.connect(self.begin_preview_scrub)
         self.clip_timeline.seek_requested.connect(self.seek_preview)
+        self.clip_timeline.seek_finished.connect(self.end_preview_scrub)
         clip_box.addWidget(self.clip_timeline)
         clip_controls = QHBoxLayout()
         self.play_btn = QPushButton()
@@ -1515,7 +2119,7 @@ class YoutubeDownloader(QMainWindow):
         except Exception as exc:
             self.preview_player = None
             self.preview_audio = None
-            QMessageBox.warning(self, "预览初始化失败", f"Qt 视频预览组件无法初始化：\n{exc}")
+            QMessageBox.warning(self, tr("preview_init_title"), tr("preview_init_message", value=exc))
             return False
 
     def resizeEvent(self, event):
@@ -1584,6 +2188,7 @@ class YoutubeDownloader(QMainWindow):
         self.format_combo.set_scale(scale)
         self.range_combo.set_scale(scale)
         self.audio_combo.set_scale(scale)
+        self.concurrency_combo.set_scale(scale)
         for label in self.section_labels:
             label.setMinimumHeight(max(20, round(26 * scale)))
         for _manager, card in self.tasks:
@@ -1597,10 +2202,22 @@ class YoutubeDownloader(QMainWindow):
         self.apply_style(self.ui_scale or 1.0)
 
     def show_language_menu(self):
+        if self._suppress_language_menu_reopen:
+            self._suppress_language_menu_reopen = False
+            return
+        if self.language_menu.isVisible():
+            self.language_menu.hide()
+            return
         for code, action in self.language_actions.items():
             action.setChecked(code == CURRENT_LANGUAGE)
         position = self.language_btn.mapToGlobal(QPoint(0, self.language_btn.height() + 2))
         self.language_menu.popup(position)
+
+    def language_menu_about_to_hide(self):
+        global_position = QCursor.pos()
+        over_button = self.language_btn.rect().contains(self.language_btn.mapFromGlobal(global_position))
+        left_pressed = bool(QApplication.mouseButtons() & Qt.MouseButton.LeftButton)
+        self._suppress_language_menu_reopen = over_button and left_pressed
 
     def set_language(self, language):
         global CURRENT_LANGUAGE
@@ -1613,6 +2230,7 @@ class YoutubeDownloader(QMainWindow):
     def apply_language(self):
         self.language_btn.setToolTip(tr("language_tip"))
         self.theme_btn.setToolTip(tr("theme_tip"))
+        self.engine_update_btn.setToolTip(tr("check_engine_update"))
         self.url_edit.setPlaceholderText(tr("url_placeholder"))
         self.parse_btn.setText(tr("paste_parse"))
         if not self.thumbnail_bytes:
@@ -1641,10 +2259,13 @@ class YoutubeDownloader(QMainWindow):
             self.range_label.setText(tr("choosing_range", value=value))
         self.download_btn.setText(tr("add_task"))
         self.tasks_section.setText(tr("tasks"))
+        self.concurrent_label.setText(tr("concurrent_downloads"))
         self.clip_section.setText(tr("clip_panel"))
         self.clip_video.setToolTip(tr("preview_tip"))
         self.frame_back_btn.setText(tr("frame_back"))
         self.frame_forward_btn.setText(tr("frame_forward"))
+        self.half_speed_btn.setToolTip(tr("half_speed"))
+        self.double_speed_btn.setToolTip(tr("double_speed"))
         self.cancel_clip_btn.setText(tr("cancel"))
         self.apply_clip_btn.setText(tr("apply"))
         playing = bool(self.preview_player and self.preview_player.playbackState() == QMediaPlayer.PlaybackState.PlayingState)
@@ -1677,17 +2298,22 @@ class YoutubeDownloader(QMainWindow):
         self.format_combo.set_theme(self.dark_mode)
         self.range_combo.set_theme(self.dark_mode)
         self.audio_combo.set_theme(self.dark_mode)
+        self.concurrency_combo.set_theme(self.dark_mode)
         self.clip_timeline.set_theme(self.dark_mode)
         self.language_btn.set_theme(self.dark_mode)
+        self.engine_update_btn.setIcon(self._button_icon("fa5s.sync-alt"))
         self.setStyleSheet(f"""
             QMainWindow, QWidget {{ background:{bg}; color:{text}; font-family:'Segoe UI','Microsoft YaHei UI'; font-size:{px(13, 10)}px; }}
             QFrame#card, QFrame#taskCard {{ background:{card}; border:1px solid {border}; border-radius:{px(12, 8)}px; }}
+            QFrame#taskCard[failed="true"] {{ background:{danger_bg}; border:1px solid {DANGER}; }}
+            QFrame#taskCard[failed="true"] QLabel {{ background:transparent; }}
             QLabel#appTitle {{ font-family:'Eras Demi ITC'; font-size:{px(31, 23)}px; font-weight:400; }}
             QLabel#brandSubtitle {{ color:{muted}; font-family:'Palatino Linotype'; font-size:{px(13, 11)}px; font-style:italic; font-weight:600; letter-spacing:{px(1)}px; padding-left:{px(3, 2)}px; }}
-            QLabel#subtitle, QLabel#taskDetail {{ color:{muted}; }}
+            QLabel#subtitle, QLabel#taskDetail {{ color:{muted}; background:transparent; border:0; }}
             QLabel#cover {{ background:#101218; color:#90949d; border-radius:{px(9, 6)}px; }}
             QLabel#videoTitle {{ font-size:{px(16, 12)}px; font-weight:650; }}
             QLabel#sectionTitle {{ background:{button}; font-size:{px(14, 11)}px; font-weight:700; padding-left:{px(5, 3)}px; border-radius:{px(4, 3)}px; }}
+            QLabel#sectionTitle[plain="true"] {{ background:transparent; }}
             QLineEdit, QComboBox {{ background:{field}; border:1px solid {border}; border-radius:{px(7, 5)}px; padding:{px(8, 5)}px {px(10, 7)}px; min-height:{px(20, 15)}px; }}
             QLineEdit:focus, QComboBox:focus {{ border:1px solid {accent}; }}
             QComboBox {{ padding-right:{px(30, 22)}px; }}
@@ -1706,6 +2332,12 @@ class YoutubeDownloader(QMainWindow):
             QPushButton:hover {{ background:{button_hover}; }} QPushButton:disabled {{ color:#8e949f; background:{disabled}; }}
             QPushButton#primary {{ color:white; background:{accent}; }} QPushButton#primary:hover {{ background:{accent_hover}; }}
             QPushButton#danger {{ color:{DANGER}; background:{danger_bg}; }}
+            QPushButton#speedToggle {{ padding:0 {px(4, 2)}px; }}
+            QPushButton#speedToggle:checked {{ color:white; background:{accent}; }}
+            QPushButton#taskIcon {{ background:transparent; padding:0; border-radius:{px(5, 4)}px; }}
+            QPushButton#taskIcon:hover {{ background:{button_hover}; }}
+            QPushButton#headerIcon {{ background:transparent; padding:{px(6, 4)}px; border-radius:{px(6, 4)}px; }}
+            QPushButton#headerIcon:hover {{ background:{button_hover}; }}
             QPushButton#themeSwitch {{ font-family:'Segoe UI Symbol'; font-size:{px(17, 13)}px; min-width:{px(22, 17)}px; padding:{px(6, 4)}px; }}
             QPushButton#languageSwitch {{ min-width:{px(31, 24)}px; min-height:{px(25, 20)}px; padding:{px(3, 2)}px; }}
             QMenu {{ background:{card}; color:{text}; border:1px solid {border}; padding:{px(5, 3)}px; }}
@@ -1717,6 +2349,8 @@ class YoutubeDownloader(QMainWindow):
             QSlider::groove:horizontal {{ height:{px(5, 4)}px; background:{progress_track}; border-radius:{px(2)}px; }}
             QSlider::handle:horizontal {{ width:{px(15, 11)}px; margin:-{px(5, 4)}px 0; background:{accent}; border-radius:{px(7, 5)}px; }}
         """)
+        if self.audio_combo.popup_frame is not None:
+            self.audio_combo.popup_frame.setStyleSheet(self.styleSheet())
         if hasattr(self, "play_btn"):
             playing = bool(
                 self.preview_player is not None
@@ -1725,6 +2359,167 @@ class YoutubeDownloader(QMainWindow):
             self.set_play_button_state(playing)
             self.sync_clip_control_sizes(scale)
 
+    def concurrency_changed(self, index):
+        value = self.concurrency_combo.itemData(index)
+        if not value:
+            return
+        self.max_concurrent_downloads = int(value)
+        self.adaptive_concurrency_cap = None
+        self.recent_transient_failures.clear()
+        self.adaptive_restore_timer.stop()
+        self.settings.setValue("concurrent_downloads", self.max_concurrent_downloads)
+        self.schedule_tasks()
+
+    def effective_concurrency(self):
+        if self.adaptive_concurrency_cap is None:
+            return self.max_concurrent_downloads
+        return min(self.max_concurrent_downloads, self.adaptive_concurrency_cap)
+
+    def schedule_tasks(self):
+        if self.engine_update_worker is not None and self.engine_update_worker.isRunning():
+            return
+        active = sum(1 for manager, _card in self.tasks if manager.state == "running")
+        available = max(0, self.effective_concurrency() - active)
+        if available <= 0:
+            return
+        for manager, _card in self.tasks:
+            if manager.state != "waiting":
+                continue
+            manager.start()
+            available -= 1
+            if available <= 0:
+                break
+
+    def handle_transient_failure(self, _detail):
+        now = time.monotonic()
+        self.recent_transient_failures = [stamp for stamp in self.recent_transient_failures if now - stamp <= 60]
+        self.recent_transient_failures.append(now)
+        if len(self.recent_transient_failures) >= 2:
+            current_cap = self.adaptive_concurrency_cap or self.max_concurrent_downloads
+            self.adaptive_concurrency_cap = max(1, current_cap - 1)
+            self.recent_transient_failures.clear()
+            self.adaptive_restore_timer.start(5 * 60 * 1000)
+
+    def restore_adaptive_concurrency(self):
+        self.adaptive_concurrency_cap = None
+        self.recent_transient_failures.clear()
+        self.schedule_tasks()
+
+    def format_became_unavailable(self):
+        QMessageBox.warning(self, tr("format_unavailable_title"), tr("format_unavailable_message"))
+
+    @staticmethod
+    def version_tuple(value):
+        return tuple(int(part) for part in re.findall(r"\d+", str(value)))
+
+    def check_engine_update(self):
+        if any(manager.state in ("running", "waiting") for manager, _card in self.tasks):
+            QMessageBox.warning(self, tr("update_failed_title"), tr("update_busy_message"))
+            return
+        if self.engine_check_worker is not None and self.engine_check_worker.isRunning():
+            return
+        self.engine_update_btn.setEnabled(False)
+        worker = EngineCheckWorker(self)
+        self.engine_check_worker = worker
+        worker.result.connect(self.engine_check_result)
+        worker.failed.connect(lambda message: QMessageBox.warning(self, tr("update_failed_title"), message))
+        worker.finished.connect(self.engine_check_finished)
+        worker.start()
+
+    def engine_check_result(self, result):
+        current, latest = result.get("current", ""), result.get("latest", "")
+        if self.version_tuple(current) >= self.version_tuple(latest):
+            QMessageBox.information(self, tr("up_to_date_title"), tr("up_to_date_message", value=current))
+            return
+        answer = QMessageBox.question(
+            self, tr("update_available_title"),
+            tr("update_available_message", current=current, latest=latest),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        worker = EngineUpdateWorker(result["url"], latest, self)
+        self.engine_update_worker = worker
+        worker.succeeded.connect(self.engine_update_succeeded)
+        worker.failed.connect(lambda message: QMessageBox.warning(self, tr("update_failed_title"), message))
+        worker.finished.connect(self.engine_update_finished)
+        worker.start()
+
+    def engine_check_finished(self):
+        worker = self.engine_check_worker
+        self.engine_check_worker = None
+        if worker is not None:
+            worker.deleteLater()
+        if self.engine_update_worker is None:
+            self.engine_update_btn.setEnabled(True)
+
+    def engine_update_succeeded(self, version):
+        QMessageBox.information(self, tr("update_success_title"), tr("update_success_message", value=version))
+
+    def engine_update_finished(self):
+        worker = self.engine_update_worker
+        self.engine_update_worker = None
+        if worker is not None:
+            worker.deleteLater()
+        self.engine_update_btn.setEnabled(True)
+        self.schedule_tasks()
+
+    def stop_preview_cache(self):
+        worker = self.preview_cache_worker
+        if worker is None:
+            return
+        if worker.isRunning():
+            worker.request_stop()
+            worker.wait(2500)
+        try:
+            worker.disconnect()
+        except TypeError:
+            pass
+        worker.deleteLater()
+        self.preview_cache_worker = None
+
+    def start_preview_cache(self):
+        self.stop_preview_cache()
+        self.preview_cache_path = None
+        self.preview_cache_error = ""
+        fmt = select_preview_format(self.info)
+        if not fmt:
+            return
+        video_id = clean_filename((self.info or {}).get("id") or "preview")
+        format_id = clean_filename(fmt.get("format_id") or "preview")
+        ext = str(fmt.get("ext") or "mp4").lower()
+        target = preview_cache_dir() / f"{video_id}-{format_id}.{ext}"
+        if target.exists() and target.stat().st_size > 0:
+            self.preview_cache_path = target
+            self.range_label.setToolTip(tr("preview_cache_ready"))
+            return
+        self.range_label.setToolTip(tr("preview_cache_loading"))
+        worker = PreviewCacheWorker(self.url_edit.text().strip(), fmt["format_id"], target)
+        self.preview_cache_worker = worker
+        worker.ready.connect(self.preview_cache_ready)
+        worker.failed.connect(self.preview_cache_failed)
+        worker.finished.connect(self.preview_cache_finished)
+        worker.start()
+
+    def preview_cache_ready(self, path):
+        target = Path(path)
+        if target.exists() and target.stat().st_size > 0:
+            self.preview_cache_path = target
+            self.preview_cache_error = ""
+            self.range_label.setToolTip(tr("preview_cache_ready"))
+
+    def preview_cache_failed(self, message):
+        self.preview_cache_error = message
+        self.preview_cache_path = None
+        self.range_label.setToolTip(message)
+
+    def preview_cache_finished(self):
+        worker = self.preview_cache_worker
+        if worker is not None and worker is self.sender():
+            self.preview_cache_worker = None
+            worker.deleteLater()
+
     def paste_and_parse(self):
         self.url_edit.setText(QApplication.clipboard().text().strip())
         self.parse_current_url()
@@ -1732,8 +2527,10 @@ class YoutubeDownloader(QMainWindow):
     def parse_current_url(self):
         url = self.url_edit.text().strip()
         if not is_supported_url(url):
-            QMessageBox.warning(self, "链接无效", "请输入有效的 YouTube 视频链接")
+            QMessageBox.warning(self, tr("invalid_link_title"), tr("invalid_link_message"))
             return
+        self.stop_preview_cache()
+        self.preview_cache_path = None
         self.parse_btn.setEnabled(False)
         self.download_btn.setEnabled(False)
         self.audio_combo.setEnabled(False)
@@ -1750,10 +2547,10 @@ class YoutubeDownloader(QMainWindow):
 
     def info_ready(self, info, thumbnail):
         self.info, self.thumbnail_bytes = info, thumbnail
-        self.video_title.setText(info.get("title") or "未命名视频")
+        self.video_title.setText(info.get("title") or tr("untitled_video"))
         duration = info.get("duration") or 0
         self.clip_start, self.clip_end = 0, float(duration)
-        uploader = info.get("uploader") or info.get("channel") or "未知频道"
+        uploader = info.get("uploader") or info.get("channel") or tr("unknown_channel")
         self.meta_label.setText(f"{uploader}  ·  {seconds_text(duration)}")
         self.filename_edit.setText(clean_filename(info.get("title")))
         self.filename_edit.setToolTip(self.filename_edit.text())
@@ -1768,9 +2565,10 @@ class YoutubeDownloader(QMainWindow):
         self.range_combo.setCurrentIndex(0)
         self.range_combo.blockSignals(False)
         self.cancel_clip_selection(reset_combo=False)
+        self.start_preview_cache()
 
     def info_failed(self, message):
-        QMessageBox.critical(self, "解析失败", message)
+        QMessageBox.critical(self, tr("parse_failed_title"), message)
 
     def fill_formats(self, info):
         self.format_combo.clear()
@@ -1856,7 +2654,7 @@ class YoutubeDownloader(QMainWindow):
                 continue
             seen.add(quality_key)
             size = estimated_size_bytes(fmt, info.get("duration"))
-            bitrate_text = f"{bitrate:.0f} kbps" if bitrate else "音质未知"
+            bitrate_text = f"{bitrate:.0f} kbps" if bitrate else tr("unknown_audio_quality")
             label = f"{ext.upper()} · {bitrate_text} · {human_size(size)}"
             data = dict(fmt)
             data.update({
@@ -1877,51 +2675,41 @@ class YoutubeDownloader(QMainWindow):
         if not self.thumbnail_bytes:
             return
         initial = self.settings.value("last_folder", str(Path.home()))
-        path, _ = QFileDialog.getSaveFileName(self, "保存封面", str(Path(initial) / (clean_filename(self.filename_edit.text()) + ".jpg")), "JPEG 图片 (*.jpg)")
+        path, _ = QFileDialog.getSaveFileName(self, tr("save_cover_dialog"), str(Path(initial) / (clean_filename(self.filename_edit.text()) + ".jpg")), "JPEG (*.jpg)")
         if path:
             if not path.lower().endswith((".jpg", ".jpeg")):
                 path += ".jpg"
             try:
                 Path(path).write_bytes(self.thumbnail_bytes)
                 self.settings.setValue("last_folder", str(Path(path).parent))
-                QMessageBox.information(self, "保存成功", "封面已保存")
+                QMessageBox.information(self, tr("save_success_title"), tr("cover_saved_message"))
             except OSError as exc:
-                QMessageBox.warning(self, "保存失败", str(exc))
+                QMessageBox.warning(self, tr("save_failed_title"), str(exc))
 
     def range_mode_changed(self, index):
         if index == 0:
-            if self.preview_player is not None:
-                self.preview_player.stop()
-            self.clip_panel.hide()
-            self.clip_applied = False
-            self.restore_full_video_filename()
+            self.cancel_clip_selection(reset_combo=False)
             self.range_label.setText(tr("full_video_info"))
             return
         if not self.info:
             self.range_combo.blockSignals(True)
             self.range_combo.setCurrentIndex(0)
             self.range_combo.blockSignals(False)
-            QMessageBox.warning(self, "尚未解析", "请先解析视频")
+            QMessageBox.warning(self, tr("not_parsed_title"), tr("not_parsed_message"))
             return
         self.show_clip_selector()
 
     def preview_stream_url(self):
-        if not self.info:
+        selected = select_preview_format(self.info)
+        if not selected:
             return None
-        progressive = [f for f in self.info.get("formats", []) if f.get("url") and f.get("vcodec") not in (None, "none") and f.get("acodec") not in (None, "none")]
-        pool = [f for f in progressive if f.get("ext") == "mp4"] or progressive
-        if not pool:
-            pool = [f for f in self.info.get("formats", []) if f.get("url") and f.get("vcodec") not in (None, "none")]
-        if not pool:
-            return None
-        selected = max(pool, key=lambda f: (int((f.get("height") or 0) <= 720), f.get("height") or 0, f.get("fps") or 0))
         self.preview_fps = float(selected.get("fps") or 30)
         return selected.get("url")
 
     def show_clip_selector(self):
         url = self.preview_stream_url()
         if not url:
-            QMessageBox.warning(self, "无法预览", "当前视频没有可用的预览流")
+            QMessageBox.warning(self, tr("preview_unavailable_title"), tr("preview_unavailable_message"))
             self.range_combo.blockSignals(True)
             self.range_combo.setCurrentIndex(0)
             self.range_combo.blockSignals(False)
@@ -1932,23 +2720,80 @@ class YoutubeDownloader(QMainWindow):
             self.range_combo.blockSignals(False)
             return
         duration_ms = max(1, int((self.info.get("duration") or 1) * 1000))
+        self.preview_seek_timer.stop()
+        self.preview_spinner_guard.stop()
+        self.preview_player.stop()
+        self.preview_duration_ms = duration_ms
+        self.preview_target_ms = 0
+        self.preview_last_position_ms = 0
+        self.preview_seek_inflight = False
+        self.preview_resume_after_seek = False
+        self.preview_scrubbing = False
+        self.preview_seek_retry_count = 0
+        self.set_preview_rate(1.0)
         self.clip_start, self.clip_end = 0.0, duration_ms / 1000
         self.clip_applied = False
         self.clip_timeline.set_duration(duration_ms)
         self.clip_timeline.set_selection(0, duration_ms, False)
         self.clip_panel.show()
         self.preview_spinner.start()
-        self.preview_player.setSource(QUrl(url))
+        if self.preview_cache_path and Path(self.preview_cache_path).exists():
+            self.preview_player.setSource(QUrl.fromLocalFile(str(self.preview_cache_path)))
+        else:
+            self.preview_player.setSource(QUrl(url))
         self.preview_player.play()
         self.set_play_button_state(True)
         value = f"{seconds_text_ms(self.clip_start)} – {seconds_text_ms(self.clip_end)}"
         self.range_label.setText(tr("choosing_range", value=value))
 
+    def preview_frame_duration_ms(self):
+        return max(1, round(1000 / max(1.0, self.preview_fps)))
+
+    def clamp_preview_position(self, milliseconds):
+        duration = max(1, self.preview_duration_ms, self.clip_timeline.duration)
+        last_frame = max(0, duration - self.preview_frame_duration_ms())
+        return max(0, min(last_frame, int(milliseconds)))
+
+    def begin_preview_scrub(self):
+        if self.preview_player is None:
+            return
+        self.preview_scrubbing = True
+        self.preview_resume_after_seek = (
+            self.preview_player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
+        )
+        self.preview_player.pause()
+
     def seek_preview(self, milliseconds):
         if self.preview_player is None:
             return
+        target = self.clamp_preview_position(milliseconds)
+        if target != self.preview_target_ms:
+            self.preview_seek_retry_count = 0
+        self.preview_target_ms = target
         self.preview_spinner.start()
-        self.preview_player.setPosition(milliseconds)
+        self.preview_spinner_guard.start(2500)
+        self.clip_timeline.set_position(target)
+        self.clip_time_label.setText(
+            f"{seconds_text_ms(target / 1000)} / {seconds_text_ms(self.preview_duration_ms / 1000)}"
+        )
+        self.preview_seek_timer.start()
+
+    def end_preview_scrub(self, milliseconds):
+        if self.preview_player is None:
+            return
+        self.preview_scrubbing = False
+        self.preview_target_ms = self.clamp_preview_position(milliseconds)
+        self.preview_seek_timer.stop()
+        self.commit_preview_seek()
+
+    def commit_preview_seek(self):
+        if self.preview_player is None:
+            return
+        self.preview_seek_inflight = True
+        self.preview_player.setPosition(self.preview_target_ms)
+        if self.preview_resume_after_seek and not self.preview_scrubbing:
+            self.preview_resume_after_seek = False
+            self.preview_player.play()
 
     def toggle_preview(self):
         if self.preview_player is None:
@@ -1957,6 +2802,19 @@ class YoutubeDownloader(QMainWindow):
             self.preview_player.pause()
         else:
             self.preview_player.play()
+
+    def set_preview_rate(self, rate):
+        if self.preview_player is not None:
+            self.preview_player.setPlaybackRate(float(rate))
+        for button in (self.half_speed_btn, self.double_speed_btn):
+            button.blockSignals(True)
+        self.half_speed_btn.setChecked(abs(float(rate) - 0.5) < 0.01)
+        self.double_speed_btn.setChecked(abs(float(rate) - 2.0) < 0.01)
+        for button in (self.half_speed_btn, self.double_speed_btn):
+            button.blockSignals(False)
+
+    def toggle_preview_rate(self, rate, checked):
+        self.set_preview_rate(rate if checked else 1.0)
 
     def preview_state_changed(self, state):
         self.set_play_button_state(state == QMediaPlayer.PlaybackState.PlayingState)
@@ -1973,37 +2831,69 @@ class YoutubeDownloader(QMainWindow):
             QMediaPlayer.MediaStatus.BufferedMedia,
         ):
             self.preview_spinner.stop()
+        elif (
+            status == QMediaPlayer.MediaStatus.EndOfMedia
+            and self.preview_seek_inflight
+            and self.preview_target_ms < self.preview_duration_ms - self.preview_frame_duration_ms() * 2
+            and self.preview_seek_retry_count < 1
+        ):
+            self.preview_seek_retry_count += 1
+            QTimer.singleShot(0, self.commit_preview_seek)
 
     def preview_frame_ready(self, frame):
         if frame.isValid():
-            self.preview_spinner.stop()
+            if not self.preview_seek_timer.isActive():
+                self.preview_spinner_guard.stop()
+                self.preview_spinner.stop()
 
     def step_preview_frame(self, direction):
         if self.preview_player is None:
             return
         self.preview_player.pause()
-        self.preview_spinner.start()
-        frame_ms = max(1, round(1000 / max(1.0, getattr(self, "preview_fps", 30.0))))
-        duration = max(self.clip_timeline.duration, self.preview_player.duration())
-        position = max(0, min(duration, self.preview_player.position() + direction * frame_ms))
-        self.preview_player.setPosition(position)
+        self.preview_resume_after_seek = False
+        self.preview_scrubbing = False
+        frame_ms = self.preview_frame_duration_ms()
+        if self.preview_seek_timer.isActive() or self.preview_seek_inflight:
+            base = self.preview_target_ms
+        else:
+            base = self.preview_last_position_ms
+        self.seek_preview(base + direction * frame_ms)
 
     def preview_position_changed(self, milliseconds):
+        milliseconds = self.clamp_preview_position(milliseconds)
+        tolerance = max(250, self.preview_frame_duration_ms() * 3)
+        if self.preview_seek_inflight:
+            if abs(milliseconds - self.preview_target_ms) > tolerance:
+                return
+            self.preview_seek_inflight = False
+            self.preview_seek_retry_count = 0
+        self.preview_last_position_ms = milliseconds
+        if not self.preview_seek_timer.isActive():
+            self.preview_target_ms = milliseconds
         self.clip_timeline.set_position(milliseconds)
-        duration = max(self.clip_timeline.duration, self.preview_player.duration())
-        self.clip_time_label.setText(f"{seconds_text_ms(milliseconds / 1000)} / {seconds_text_ms(duration / 1000)}")
+        self.clip_time_label.setText(
+            f"{seconds_text_ms(milliseconds / 1000)} / {seconds_text_ms(self.preview_duration_ms / 1000)}"
+        )
 
     def preview_error(self, _error, message):
+        self.preview_seek_timer.stop()
+        self.preview_spinner_guard.stop()
+        self.preview_seek_inflight = False
         self.preview_spinner.stop()
         if message:
-            self.clip_time_label.setText("预览加载失败")
+            self.clip_time_label.setText(tr("preview_load_failed"))
+
+    def preview_selection_position_seconds(self):
+        if self.preview_seek_timer.isActive() or self.preview_seek_inflight:
+            return self.preview_target_ms / 1000
+        return self.preview_last_position_ms / 1000
 
     def set_clip_start(self):
         if self.preview_player is None:
             return
-        current = self.preview_player.position() / 1000
+        current = self.preview_selection_position_seconds()
         if current >= self.clip_end:
-            QMessageBox.warning(self, "边界无效", "左边界必须早于右边界")
+            QMessageBox.warning(self, tr("boundary_invalid_title"), tr("start_boundary_message"))
             return
         self.clip_start = current
         self.clip_applied = False
@@ -2015,9 +2905,9 @@ class YoutubeDownloader(QMainWindow):
     def set_clip_end(self):
         if self.preview_player is None:
             return
-        current = self.preview_player.position() / 1000
+        current = self.preview_selection_position_seconds()
         if current <= self.clip_start:
-            QMessageBox.warning(self, "边界无效", "右边界必须晚于左边界")
+            QMessageBox.warning(self, tr("boundary_invalid_title"), tr("end_boundary_message"))
             return
         self.clip_end = current
         self.clip_applied = False
@@ -2027,8 +2917,15 @@ class YoutubeDownloader(QMainWindow):
         self.range_label.setText(tr("pending_range", value=value))
 
     def cancel_clip_selection(self, reset_combo=True):
+        if hasattr(self, "preview_seek_timer"):
+            self.preview_seek_timer.stop()
+        if hasattr(self, "preview_spinner_guard"):
+            self.preview_spinner_guard.stop()
         if self.preview_player is not None:
             self.preview_player.stop()
+        self.preview_seek_inflight = False
+        self.preview_resume_after_seek = False
+        self.preview_scrubbing = False
         if hasattr(self, "preview_spinner"):
             self.preview_spinner.stop()
         if hasattr(self, "clip_panel"):
@@ -2051,7 +2948,7 @@ class YoutubeDownloader(QMainWindow):
 
     def apply_clip_selection(self):
         if self.clip_end <= self.clip_start:
-            QMessageBox.warning(self, "区间无效", "请先用 [ 和 ] 设置有效区间")
+            QMessageBox.warning(self, tr("range_invalid_title"), tr("range_invalid_message"))
             return
         self.clip_applied = True
         self.clip_timeline.set_selection(self.clip_start * 1000, self.clip_end * 1000, True)
@@ -2069,12 +2966,12 @@ class YoutubeDownloader(QMainWindow):
         if not target.exists():
             return str(target), False
         dialog = QMessageBox(self)
-        dialog.setWindowTitle("文件已存在")
+        dialog.setWindowTitle(tr("file_exists_title"))
         dialog.setIcon(QMessageBox.Icon.Question)
-        dialog.setText(f"目标文件已经存在：\n{target.name}")
-        overwrite_button = dialog.addButton("覆盖", QMessageBox.ButtonRole.AcceptRole)
-        cancel_button = dialog.addButton("取消下载", QMessageBox.ButtonRole.RejectRole)
-        number_button = dialog.addButton("添加序号", QMessageBox.ButtonRole.ActionRole)
+        dialog.setText(tr("file_exists_message", value=target.name))
+        overwrite_button = dialog.addButton(tr("overwrite"), QMessageBox.ButtonRole.AcceptRole)
+        cancel_button = dialog.addButton(tr("cancel_download"), QMessageBox.ButtonRole.RejectRole)
+        number_button = dialog.addButton(tr("add_number"), QMessageBox.ButtonRole.ActionRole)
         dialog.setDefaultButton(number_button)
         dialog.exec()
         clicked = dialog.clickedButton()
@@ -2107,8 +3004,8 @@ class YoutubeDownloader(QMainWindow):
             return True
         QMessageBox.warning(
             self,
-            "磁盘空间不足",
-            f"预计至少需要 {human_size(required)}，目标磁盘当前可用 {human_size(free)}。\n请更换保存位置或释放空间。",
+            tr("disk_space_title"),
+            tr("disk_space_message", required=human_size(required), free=human_size(free)),
         )
         return False
 
@@ -2121,21 +3018,18 @@ class YoutubeDownloader(QMainWindow):
         self.audio_combo.blockSignals(False)
         if not self.info or not audio_format:
             return
-        if len(self.tasks) >= MAX_TASKS:
-            QMessageBox.warning(self, "任务已满", "最多同时保留 5 个下载任务，请先清除一个任务")
-            return
         section = None
         if self.range_combo.currentIndex() == 1:
             if not self.clip_applied or self.clip_end <= self.clip_start:
-                QMessageBox.warning(self, "区间未应用", "请先在右下角设置并应用视频区间")
+                QMessageBox.warning(self, tr("range_not_applied_title"), tr("range_not_applied_message"))
                 return
             section = (self.clip_start, self.clip_end)
         ext = audio_format.get("audio_ext") or audio_format.get("ext") or "m4a"
         name = clean_filename(self.filename_edit.text())
         initial = Path(self.settings.value("last_folder", str(Path.home())))
         path, _ = QFileDialog.getSaveFileName(
-            self, "保存音频", str(initial / f"{name}.{ext}"),
-            f"{ext.upper()} 音频 (*.{ext});;所有文件 (*)", options=QFileDialog.Option.DontConfirmOverwrite,
+            self, tr("save_audio_dialog"), str(initial / f"{name}.{ext}"),
+            f"{ext.upper()} (*.{ext});;{tr('all_files')} (*)", options=QFileDialog.Option.DontConfirmOverwrite,
         )
         if not path:
             return
@@ -2157,15 +3051,12 @@ class YoutubeDownloader(QMainWindow):
     def prepare_download(self):
         if not self.info or self.format_combo.currentIndex() < 0:
             return
-        if len(self.tasks) >= MAX_TASKS:
-            QMessageBox.warning(self, "任务已满", "最多同时保留 5 个下载任务，请先清除一个任务")
-            return
         fmt, name = self.format_combo.currentData(), clean_filename(self.filename_edit.text())
         ext = fmt.get("merge_ext") or "mp4"
         initial = Path(self.settings.value("last_folder", str(Path.home())))
         path, _ = QFileDialog.getSaveFileName(
-            self, "保存视频", str(initial / f"{name}.{ext}"),
-            f"{ext.upper()} 视频 (*.{ext});;所有文件 (*)", options=QFileDialog.Option.DontConfirmOverwrite,
+            self, tr("save_video_dialog"), str(initial / f"{name}.{ext}"),
+            f"{ext.upper()} (*.{ext});;{tr('all_files')} (*)", options=QFileDialog.Option.DontConfirmOverwrite,
         )
         if not path:
             return
@@ -2178,7 +3069,7 @@ class YoutubeDownloader(QMainWindow):
         section = None
         if self.range_combo.currentIndex() == 1:
             if not self.clip_applied or self.clip_end <= self.clip_start:
-                QMessageBox.warning(self, "区间未应用", "请先在右下角设置并应用视频区间")
+                QMessageBox.warning(self, tr("range_not_applied_title"), tr("range_not_applied_message"))
                 return
             section = (self.clip_start, self.clip_end)
         if not self.ensure_disk_space(path, fmt.get("estimated_bytes"), section):
@@ -2204,10 +3095,19 @@ class YoutubeDownloader(QMainWindow):
         card = DownloadTaskWidget(manager, self.thumbnail_bytes)
         card.set_scale(self.ui_scale or 1.0)
         card.removed.connect(self.remove_task)
+        manager.queue_requested.connect(self.schedule_tasks)
+        manager.transient_failure.connect(self.handle_transient_failure)
+        manager.format_unavailable.connect(self.format_became_unavailable)
+        manager.state_changed.connect(lambda _state, _detail: QTimer.singleShot(0, self.schedule_tasks))
         self.tasks.append((manager, card))
         self.task_layout.insertWidget(0, card)
+        while len(self.tasks) > MAX_TASKS:
+            oldest_manager, oldest_card = self.tasks.pop(0)
+            oldest_manager.hide_and_discard_cache()
+            oldest_card.deleteLater()
+            oldest_manager.deleteLater()
         self.update_task_count()
-        manager.start()
+        self.schedule_tasks()
 
     def remove_task(self, card):
         for index, (manager, widget) in enumerate(list(self.tasks)):
@@ -2217,20 +3117,29 @@ class YoutubeDownloader(QMainWindow):
                 manager.deleteLater()
                 break
         self.update_task_count()
+        self.schedule_tasks()
 
     def update_task_count(self):
-        self.task_count.setText(f"{len(self.tasks)} / {MAX_TASKS}")
+        self.task_count.setText(f"{len(self.tasks)}/{MAX_TASKS}")
 
     def closeEvent(self, event):
+        if (
+            (self.engine_check_worker is not None and self.engine_check_worker.isRunning())
+            or (self.engine_update_worker is not None and self.engine_update_worker.isRunning())
+        ):
+            QMessageBox.warning(self, tr("update_failed_title"), tr("update_in_progress_message"))
+            event.ignore()
+            return
         active = [manager for manager, _ in self.tasks if manager.state == "running"]
         if active:
-            answer = QMessageBox.question(self, "退出程序", "仍有下载任务运行。退出会暂停任务并保留断点文件，是否退出？",
+            answer = QMessageBox.question(self, tr("exit_title"), tr("exit_message"),
                                           QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
             if answer != QMessageBox.StandardButton.Yes:
                 event.ignore()
                 return
             for manager in active:
                 manager.pause()
+        self.stop_preview_cache()
         event.accept()
 
 
@@ -2247,7 +3156,7 @@ if __name__ == "__main__":
             (runtime_dir() / "ytdl_startup_error.log").write_text(details, encoding="utf-8")
         except OSError:
             pass
-        QMessageBox.critical(None, "启动失败", f"程序初始化失败，详细信息已写入 ytdl_startup_error.log。\n\n{details[-1200:]}")
+        QMessageBox.critical(None, tr("startup_failed_title"), tr("startup_failed_message", value=details[-1200:]))
         sys.exit(1)
     window.show()
     sys.exit(app.exec())
