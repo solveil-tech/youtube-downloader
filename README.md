@@ -29,6 +29,8 @@
 
 需要 Python 3.11 或更高版本：
 
+Windows 用户可以直接双击 `check_ytdl.bat`。它会创建独立的 `.checkenv`、自动安装依赖、检查源码并启动程序。
+
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
@@ -50,6 +52,7 @@ python -m venv .venv
 - `yt_dlp.exe`：yt-dlp 下载引擎
 - `icon.ico`：应用图标
 - `requirements.txt`：Python 依赖
+- `check_ytdl.bat`：一键准备检查环境并运行源码
 - `ytdl.spec`、`build.ps1`：可复现构建配置
 
 ## 说明

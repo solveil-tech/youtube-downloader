@@ -1172,11 +1172,22 @@ class DownloadManager(QWidget):
         if self.download_cover:
             args += ["--write-thumbnail", "--convert-thumbnails", "jpg"]
         if self.section:
+            # Keep the selected source streams intact and cut on nearby keyframes.
+            # This follows the fast lossless path used by LosslessCut: stream copy
+            # instead of yt-dlp's --force-keyframes-at-cuts full re-encode.
             args += [
                 "--download-sections", f"*{self.section[0]:.3f}-{self.section[1]:.3f}",
-                "--downloader", "ffmpeg", "--force-keyframes-at-cuts",
+                "--downloader", "ffmpeg", "--no-force-keyframes-at-cuts",
                 "--downloader-args", "ffmpeg:-progress pipe:2 -nostats",
+                "--downloader-args", "ffmpeg_o:-avoid_negative_ts make_zero",
+                "--postprocessor-args", "Merger+ffmpeg_o:-avoid_negative_ts make_zero",
+                "--fixup", "force",
             ]
+            if self.merge_ext == "mp4":
+                args += [
+                    "--downloader-args", "ffmpeg_o:-movflags +faststart",
+                    "--postprocessor-args", "Merger+ffmpeg_o:-movflags +faststart",
+                ]
         if cookie_path():
             args += ["--cookies", str(cookie_path())]
         ffmpeg = bundled_path("ffmpeg.exe")
@@ -1988,6 +1999,7 @@ class YoutubeDownloader(QMainWindow):
         self.concurrent_label = QLabel(tr("concurrent_downloads"))
         self.concurrent_label.setObjectName("subtitle")
         self.concurrency_combo = ChevronComboBox()
+        self.concurrency_combo.setObjectName("concurrencyCombo")
         self.concurrency_combo.setMaxVisibleItems(MAX_CONCURRENT_DOWNLOADS)
         for value in range(1, MAX_CONCURRENT_DOWNLOADS + 1):
             self.concurrency_combo.addItem(str(value), value)
@@ -2319,6 +2331,8 @@ class YoutubeDownloader(QMainWindow):
             QComboBox {{ padding-right:{px(30, 22)}px; }}
             QComboBox::drop-down {{ subcontrol-origin:padding; subcontrol-position:top right; width:{px(28, 21)}px; border:0; background:transparent; }}
             QComboBox::down-arrow {{ image:none; width:0; height:0; }}
+            QComboBox#concurrencyCombo {{ padding-left:{px(8, 6)}px; padding-right:{px(28, 21)}px; }}
+            QComboBox#concurrencyCombo::drop-down {{ width:0; }}
             QPushButton#comboArrowButton, QPushButton#comboArrowButton:hover {{ background:transparent; border:0; padding:0; margin:0; }}
             QPushButton#clipBoundary {{ padding:0; margin:0; text-align:center; font-family:'Segoe UI Symbol'; }}
             QComboBox QAbstractItemView {{ background:{card}; border:1px solid {border}; outline:0; margin:0; padding:{px(3, 2)}px; selection-background-color:{popup_hover}; selection-color:{text}; }}
