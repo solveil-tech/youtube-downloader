@@ -39,6 +39,7 @@ GROUPS = [
     ("MEOVV", "미야오", "meovv-members-profile", []),
     ("Hearts2Hearts", "하츠투하츠", "hearts2hearts-members-profile", ["H2H", "hearts to hearts"]),
     ("KiiiKiii", "키키", "kiiikiii-members-profile", []),
+    ("ifeye", "이프아이", "hi-hat-girls-members-profile", ["if eye", "if-eye"]),
     ("izna", "이즈나", "izna-members-profile", []),
     ("UNIS", "유니스", "unis-members-profile", []),
     ("tripleS", "트리플에스", "triples-members-profile-and-facts", ["triple s"]),
@@ -358,7 +359,9 @@ def aliases_for(rec):
     return stage, stage_ko, full, full_ko, list(aliases.values())
 
 
-def build(results, failures):
+def build(results, failures, preserve_existing=False):
+    old_path = ROOT / "idol_aliases.json"
+    old_members = {m["id"]: m for m in json.loads(old_path.read_text(encoding="utf-8"))["members"]} if preserve_existing and old_path.exists() else {}
     members = []
     groups = []
     for result in results:
@@ -385,6 +388,7 @@ def build(results, failures):
         ("TWICE", "https://www.twicejapan.com/feature/profile", ["Nayeon", "Jeongyeon", "Momo", "Sana", "Jihyo", "Mina", "Dahyun", "Chaeyoung", "Tzuyu"]),
         ("LE SSERAFIM", "https://www.le-sserafim.jp/profile", ["Kim Chaewon", "Kim Chae Won", "Sakura", "Huh Yunjin", "Huh Yun Jin", "Kazuha", "Hong Eunchae", "Hong Eun Chae"]),
         ("IVE", "https://www.sonymusic.co.jp/artist/IVE/profile/", ["Yujin", "Gaeul", "Rei", "Wonyoung", "Liz", "Leeseo"]),
+        ("ifeye", "https://www.genie.co.kr/detail/artistInfo?xxnm=82813665", ["Won Hwayeon", "Taerin", "Rahee", "Kasia", "Meu", "Sasha"]),
     ]
     for group, url, names in official_checks:
         for name in names:
@@ -410,6 +414,13 @@ def build(results, failures):
 
     from chinese_support import enrich_chinese_names, save_chinese_sql
     chinese_summary = enrich_chinese_names(members, ROOT, normalize)
+    # Chinese script variants can originate from sets. An incremental group
+    # addition must not reorder otherwise identical existing member aliases.
+    for index, member in enumerate(members):
+        previous = old_members.get(member["id"])
+        if previous and {k: v for k, v in member.items() if k != "aliases"} == {k: v for k, v in previous.items() if k != "aliases"}:
+            if sorted(json.dumps(a, sort_keys=True) for a in member["aliases"]) == sorted(json.dumps(a, sort_keys=True) for a in previous["aliases"]):
+                members[index] = previous
     index = {}
     for member in members:
         for alias in member["aliases"]:
@@ -502,6 +513,7 @@ q.addEventListener('input',draw);g.addEventListener('change',draw);amb.addEventL
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--refresh", action="store_true", help="Refetch the name-only cache")
+    parser.add_argument("--add-group", action="append", help="Fetch a newly configured group without refreshing existing records")
     parser.add_argument("--inspect", nargs="+", help="Print source name labels for manual extraction review")
     args = parser.parse_args()
     if args.inspect:
@@ -522,7 +534,19 @@ def main():
     cache = ROOT / "source_names.json"
     if cache.exists() and not args.refresh:
         cached = json.loads(cache.read_text(encoding="utf-8"))
-        build(cached["results"], cached["failures"])
+        for name in args.add_group or []:
+            group = next((g for g in GROUPS if normalize(g[0]) == normalize(name)), None)
+            if group is None:
+                raise ValueError("Unknown configured group: " + name)
+            if any(r["name"] == group[0] for r in cached["results"]):
+                continue
+            result = fetch_with_supplements(group)
+            if not result["records"]:
+                raise ValueError("No member name records: " + name)
+            cached["results"].append(result)
+        if args.add_group:
+            cache.write_text(json.dumps(cached, ensure_ascii=False, indent=2), encoding="utf-8")
+        build(cached["results"], cached["failures"], preserve_existing=bool(args.add_group))
         return
     results, failures = [], []
     with ThreadPoolExecutor(max_workers=4) as pool:

@@ -15,11 +15,21 @@ assert not data["fetch_failures"], "Unresolved source fetches"
 counts = Counter(m["group"] for m in members.values())
 expected = {"fromis_9": 9, "TWICE": 9, "BLACKPINK": 4, "IVE": 6,
             "LE SSERAFIM": 6, "tripleS": 24, "WJSN": 13,
-            "9MUSES": 14, "IZ*ONE": 12, "LOONA": 12, "Weeekly": 7}
+            "9MUSES": 14, "IZ*ONE": 12, "LOONA": 12, "Weeekly": 7, "ifeye": 6}
 for group, count in expected.items():
     assert counts[group] == count, (group, counts[group], count)
 
 required = {
+    "Kasia": "ifeye:kasia",
+    "Lee Gayeon": "ifeye:kasia",
+    "Won Hwayeon": "ifeye:wonhwayeon",
+    "Hwayeon": "ifeye:wonhwayeon",
+    "Taerin": "ifeye:taerin",
+    "Choi Jiwoo": "ifeye:taerin",
+    "Rahee": "ifeye:rahee",
+    "Meu": "ifeye:meu",
+    "Sasha": "ifeye:sasha",
+    "사샤": "ifeye:sasha",
     "nagyung": "fromis9:nagyung",
     "nakyung": "fromis9:nagyung",
     "leenagyung": "fromis9:nagyung",

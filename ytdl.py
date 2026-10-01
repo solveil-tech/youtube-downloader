@@ -28,7 +28,7 @@ if getattr(sys, "frozen", False) and os.name == "nt":
         if hasattr(os, "add_dll_directory"):
             _QT_DLL_DIRECTORY_HANDLE = os.add_dll_directory(str(_qt_dll_dir))
 
-from PyQt6.QtCore import QEvent, QPoint, QProcess, QRectF, QSettings, QSize, Qt, QThread, QTimer, QUrl, QStringListModel, pyqtSignal
+from PyQt6.QtCore import QEvent, QPoint, QProcess, QRectF, QSettings, QSize, Qt, QThread, QTimer, QUrl, QStringListModel, pyqtSignal, QObject, QVariantAnimation, QEasingCurve
 from PyQt6.QtGui import QAction, QColor, QCursor, QDesktopServices, QFont, QIcon, QImage, QPainter, QPen, QPixmap
 from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PyQt6.QtMultimediaWidgets import QVideoWidget
@@ -36,7 +36,7 @@ from PyQt6.QtNetwork import QNetworkAccessManager, QNetworkRequest
 from PyQt6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QCompleter, QFileDialog, QFrame, QHBoxLayout, QInputDialog,
     QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton,
-    QScrollArea, QScrollBar, QSizePolicy, QStyle, QStyledItemDelegate, QStyleOptionViewItem,
+    QScrollArea, QScrollBar, QSizePolicy, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QAbstractItemView,
     QVBoxLayout, QWidget,
 )
 
@@ -1215,53 +1215,58 @@ class CompletionItemDelegate(FlatItemDelegate):
 
 
 class MinimalVerticalScrollBar(QScrollBar):
-    def __init__(self, parent=None):
-        super().__init__(Qt.Orientation.Vertical, parent)
+    def __init__(self, parent=None, orientation=Qt.Orientation.Vertical):
+        super().__init__(orientation, parent)
         self.dragging = False
         self.drag_offset = 0.0
         self.bar_width = 8
-        self.track_color = QColor(CARD)
-        self.handle_color = QColor(BORDER)
-        self.setFixedWidth(self.bar_width)
+        self.track_color = QColor("transparent")
+        self.handle_color = QColor(110, 120, 138, 110)
+        self.setAutoFillBackground(False)
+        self.set_scale(1.0)
         self.valueChanged.connect(self.update)
         self.rangeChanged.connect(lambda _minimum, _maximum: self.update())
 
     def set_scale(self, scale):
         self.bar_width = max(6, round(8 * scale))
-        self.setFixedWidth(self.bar_width)
+        if self.orientation() == Qt.Orientation.Vertical:
+            self.setFixedWidth(self.bar_width)
+        else:
+            self.setFixedHeight(self.bar_width)
         self.update()
 
     def set_theme(self, dark):
-        self.track_color = QColor("#1d2027" if dark else CARD)
-        self.handle_color = QColor("#4a505d" if dark else BORDER)
+        self.handle_color = QColor(170, 180, 200, 110) if dark else QColor(100, 112, 135, 110)
         self.update()
 
     def handle_rect(self):
         top_margin = 2.0
-        track_height = max(1.0, self.height() - top_margin * 2)
+        vertical = self.orientation() == Qt.Orientation.Vertical
+        track_height = max(1.0, (self.height() if vertical else self.width()) - top_margin * 2)
         value_range = self.maximum() - self.minimum()
         if value_range <= 0:
-            return QRectF(1, top_margin, max(2, self.width() - 2), track_height)
+            return QRectF(1, top_margin, max(2, self.width() - 2), track_height) if vertical else QRectF(top_margin, 1, track_height, max(2, self.height() - 2))
         total = value_range + max(1, self.pageStep())
         handle_height = max(22.0, track_height * self.pageStep() / total)
         handle_height = min(track_height, handle_height)
         travel = max(1.0, track_height - handle_height)
         ratio = (self.value() - self.minimum()) / value_range
         top = top_margin + travel * ratio
-        return QRectF(1, top, max(2, self.width() - 2), handle_height)
+        return QRectF(1, top, max(2, self.width() - 2), handle_height) if vertical else QRectF(top, 1, handle_height, max(2, self.height() - 2))
 
     def value_from_position(self, y, drag_offset=None):
         rect = self.handle_rect()
-        track_height = max(1.0, self.height() - 4.0)
-        travel = max(1.0, track_height - rect.height())
-        offset = rect.height() / 2 if drag_offset is None else drag_offset
+        vertical = self.orientation() == Qt.Orientation.Vertical
+        track_height = max(1.0, (self.height() if vertical else self.width()) - 4.0)
+        length = rect.height() if vertical else rect.width()
+        travel = max(1.0, track_height - length)
+        offset = length / 2 if drag_offset is None else drag_offset
         ratio = max(0.0, min(1.0, (y - 2.0 - offset) / travel))
         return round(self.minimum() + ratio * (self.maximum() - self.minimum()))
 
     def paintEvent(self, _event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.fillRect(self.rect(), self.track_color)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(self.handle_color)
         rect = self.handle_rect()
@@ -1275,14 +1280,14 @@ class MinimalVerticalScrollBar(QScrollBar):
         rect = self.handle_rect()
         if rect.contains(event.position()):
             self.dragging = True
-            self.drag_offset = event.position().y() - rect.top()
+            self.drag_offset = (event.position().y() - rect.top()) if self.orientation() == Qt.Orientation.Vertical else (event.position().x() - rect.left())
         else:
-            self.setValue(self.value_from_position(event.position().y()))
+            self.setValue(self.value_from_position(event.position().y() if self.orientation() == Qt.Orientation.Vertical else event.position().x()))
         event.accept()
 
     def mouseMoveEvent(self, event):
         if self.dragging:
-            self.setValue(self.value_from_position(event.position().y(), self.drag_offset))
+            self.setValue(self.value_from_position(event.position().y() if self.orientation() == Qt.Orientation.Vertical else event.position().x(), self.drag_offset))
             event.accept()
             return
         super().mouseMoveEvent(event)
@@ -1293,6 +1298,58 @@ class MinimalVerticalScrollBar(QScrollBar):
             event.accept()
             return
         super().mouseReleaseEvent(event)
+
+
+class SmoothScroll(QObject):
+    def __init__(self, view):
+        super().__init__(view)
+        self.view = view
+        self.item_steps = isinstance(view, QAbstractItemView) and view.verticalScrollMode() == QAbstractItemView.ScrollMode.ScrollPerItem
+        if isinstance(view, QAbstractItemView):
+            view.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+            view.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.animations = {}
+        for bar in (view.verticalScrollBar(), view.horizontalScrollBar()):
+            animation = QVariantAnimation(self)
+            animation.setDuration(170)
+            animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+            animation.valueChanged.connect(lambda value, b=bar: b.setValue(round(value)))
+            self.animations[bar] = animation
+            bar.installEventFilter(self)
+        view.viewport().installEventFilter(self)
+
+    def eventFilter(self, watched, event):
+        if watched in self.animations and event.type() == QEvent.Type.MouseButtonPress:
+            self.animations[watched].stop()
+        if event.type() != QEvent.Type.Wheel:
+            return False
+        horizontal = watched is self.view.horizontalScrollBar() or abs(event.angleDelta().x()) > abs(event.angleDelta().y()) or bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
+        bar = self.view.horizontalScrollBar() if horizontal else self.view.verticalScrollBar()
+        if bar.maximum() <= bar.minimum():
+            return False
+        pixel = event.pixelDelta().x() if horizontal else event.pixelDelta().y()
+        angle = event.angleDelta().x() if horizontal else event.angleDelta().y()
+        if horizontal and not angle:
+            angle = event.angleDelta().y()
+        step = bar.singleStep()
+        if self.item_steps and not horizontal:
+            step = max(1, self.view.sizeHintForRow(0))
+        distance = -pixel * 0.7 if pixel else -angle / 120 * QApplication.wheelScrollLines() * step * 0.7
+        animation = self.animations[bar]
+        target = float(animation.endValue()) if animation.state() == QVariantAnimation.State.Running else bar.value()
+        target = max(bar.minimum(), min(bar.maximum(), target + distance))
+        animation.stop()
+        animation.setStartValue(float(bar.value()))
+        animation.setEndValue(float(target))
+        animation.start()
+        event.accept()
+        return True
+
+
+def install_smooth_scroll(view):
+    view.setVerticalScrollBar(MinimalVerticalScrollBar(view))
+    view.setHorizontalScrollBar(MinimalVerticalScrollBar(view, Qt.Orientation.Horizontal))
+    view.smooth_scroll = SmoothScroll(view)
 
 
 class ChevronButton(QPushButton):
@@ -1438,6 +1495,9 @@ class ChevronComboBox(QComboBox):
             scrollbar.set_scale(self.current_scale)
             scrollbar.set_theme(self.dark_theme)
             self.popup_list.setVerticalScrollBar(scrollbar)
+            install_smooth_scroll(self.popup_list)
+            self.popup_list.verticalScrollBar().set_scale(self.current_scale)
+            self.popup_list.verticalScrollBar().set_theme(self.dark_theme)
             self.popup_list.itemClicked.connect(self.popup_item_clicked)
             popup_layout.addWidget(self.popup_list)
         self.popup_list.clear()
@@ -2291,6 +2351,7 @@ class YoutubeDownloader(QMainWindow):
             popup.viewport().setMouseTracking(True)
             popup.setItemDelegate(CompletionItemDelegate(popup))
             popup.setVerticalScrollBar(MinimalVerticalScrollBar(popup))
+            install_smooth_scroll(popup)
             popup.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         QApplication.instance().applicationStateChanged.connect(self.completion_application_state)
         QApplication.instance().installEventFilter(self)
@@ -2326,6 +2387,7 @@ class YoutubeDownloader(QMainWindow):
         self.results_list = QListWidget()
         self.results_list.setObjectName("comboPopupList")
         self.results_list.setVerticalScrollBar(MinimalVerticalScrollBar())
+        install_smooth_scroll(self.results_list)
         self.results_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         popup_layout.addWidget(self.results_list)
         batch_row = QHBoxLayout()
@@ -3082,6 +3144,7 @@ class YoutubeDownloader(QMainWindow):
         task_header.addWidget(self.task_count)
         task_box.addLayout(task_header)
         self.task_scroll = QScrollArea()
+        install_smooth_scroll(self.task_scroll)
         self.task_scroll.setWidgetResizable(True)
         self.task_scroll.setMinimumHeight(210)
         self.task_scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -3448,6 +3511,9 @@ class YoutubeDownloader(QMainWindow):
         self.results_popup.setStyleSheet(self.styleSheet())
         for completer in (self.group_completer, self.member_completer):
             completer.popup().setStyleSheet(f"QListView {{ background:{card}; color:{text}; border:1px solid {border}; padding:0; }} QListView::item {{ padding:0 8px; border:0; margin:0; }} QListView::item:hover, QListView::item:selected {{ background:{popup_hover}; color:{text}; border:0; }}")
+        for bar in self.findChildren(MinimalVerticalScrollBar):
+            bar.set_theme(self.dark_mode)
+            bar.set_scale(scale)
         self.duplicate_indicator.setStyleSheet("background:#fff0cf;color:#ae6a00;border-radius:11px;font-weight:700;")
         self.refresh_duplicate_indicator()
         if hasattr(self, "play_btn"):

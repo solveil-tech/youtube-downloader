@@ -108,6 +108,7 @@ class SearchChecks(unittest.TestCase):
         self.assertEqual(member_display_name(self.db.by_id["nmixx:kyujin"]), "Jang Kyujin")
         self.assertEqual(member_display_name(self.db.by_id["fromis9:nagyung"]), "Lee Nagyung")
         self.assertEqual(member_display_name(self.db.by_id["twice:jeongyeon"]), "Yoo Jeongyeon")
+        self.assertEqual(member_display_name(self.db.by_id["ifeye:wonhwayeon"]), "Won Hwayeon")
         self.assertEqual(member_display_name(self.db.by_id["katseye:daniela"]), "Daniela Andrea Avanzini Llorente")
         self.assertEqual(member_display_name({"stage_name": "Anne", "full_name": "Anne-Marie McDonald", "full_name_hangul": "앤마리"}), "Anne-Marie McDonald")
         self.assertEqual(self.db.member_matches("Yoo Jeong Yeon", "TWICE", exact=True)[0]["id"], "twice:jeongyeon")

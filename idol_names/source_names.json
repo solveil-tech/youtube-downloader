@@ -8030,6 +8030,73 @@
           "source_url": "https://kprofiles.com/pixy-members-profile/"
         }
       ]
+    },
+    {
+      "name": "ifeye",
+      "korean": "이프아이",
+      "aliases": [
+        "ifeye",
+        "이프아이",
+        "if eye",
+        "if-eye"
+      ],
+      "source_url": "https://kprofiles.com/hi-hat-girls-members-profile/",
+      "records": [
+        {
+          "group": "ifeye",
+          "stage_raw": "Kasia (카시아)",
+          "fields": {
+            "birth name": "Lee Ga Yeon (이가연)"
+          },
+          "historical_section": false,
+          "source_url": "https://kprofiles.com/hi-hat-girls-members-profile/"
+        },
+        {
+          "group": "ifeye",
+          "stage_raw": "Won Hwayeon (원화연)",
+          "fields": {
+            "birth name": "Won Hwa Yeon (원화연)"
+          },
+          "historical_section": false,
+          "source_url": "https://kprofiles.com/hi-hat-girls-members-profile/"
+        },
+        {
+          "group": "ifeye",
+          "stage_raw": "Taerin (태린)",
+          "fields": {
+            "birth name": "Choi Ji Woo (최지우)"
+          },
+          "historical_section": false,
+          "source_url": "https://kprofiles.com/hi-hat-girls-members-profile/"
+        },
+        {
+          "group": "ifeye",
+          "stage_raw": "Rahee (라희)",
+          "fields": {
+            "birth name": "Kim Ra Hee (김라희)"
+          },
+          "historical_section": false,
+          "source_url": "https://kprofiles.com/hi-hat-girls-members-profile/"
+        },
+        {
+          "group": "ifeye",
+          "stage_raw": "Meu (미유)",
+          "fields": {
+            "birth name": "Lee Chae Won (이채원)"
+          },
+          "historical_section": false,
+          "source_url": "https://kprofiles.com/hi-hat-girls-members-profile/"
+        },
+        {
+          "group": "ifeye",
+          "stage_raw": "Sasha (사샤)",
+          "fields": {
+            "birth name": "Jeong Seo Yul (정서율)"
+          },
+          "historical_section": false,
+          "source_url": "https://kprofiles.com/hi-hat-girls-members-profile/"
+        }
+      ]
     }
   ],
   "failures": []

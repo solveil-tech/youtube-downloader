@@ -4,7 +4,7 @@
   "chinese_summary": {
     "policy": "Official usage outranks community usage. Counts mean distinct cited pages, not internet-wide popularity. Simplified equivalents are display/search conversions, not new official attestations. Missing entries remain pending.",
     "coverage": 39,
-    "pending": 705,
+    "pending": 711,
     "official_usage": 5,
     "official_confirmed": 0
   },
@@ -1030,6 +1030,17 @@
         "픽시"
       ],
       "source_url": "https://kprofiles.com/pixy-members-profile/"
+    },
+    {
+      "name": "ifeye",
+      "korean": "이프아이",
+      "aliases": [
+        "ifeye",
+        "이프아이",
+        "if eye",
+        "if-eye"
+      ],
+      "source_url": "https://kprofiles.com/hi-hat-girls-members-profile/"
     }
   ],
   "members": [
@@ -75928,6 +75939,644 @@
       "chinese_name_status": "pending",
       "chinese_name_selection": null,
       "chinese_names": []
+    },
+    {
+      "id": "ifeye:kasia",
+      "group": "ifeye",
+      "stage_name": "Kasia",
+      "stage_name_hangul": "카시아",
+      "full_name": "Lee Ga Yeon",
+      "full_name_hangul": "이가연",
+      "historical_section": false,
+      "verification": "community_profile_extracted",
+      "source_url": "https://kprofiles.com/hi-hat-girls-members-profile/",
+      "raw_name_fields": {
+        "birth name": "Lee Ga Yeon (이가연)"
+      },
+      "aliases": [
+        {
+          "text": "Kasia",
+          "normalized": "kasia",
+          "kind": "source_stage",
+          "priority": 100,
+          "evidence": "https://kprofiles.com/hi-hat-girls-members-profile/"
+        },
+        {
+          "text": "카시아",
+          "normalized": "카시아",
+          "kind": "source_stage_hangul",
+          "priority": 100,
+          "evidence": "https://kprofiles.com/hi-hat-girls-members-profile/"
+        },
+        {
+          "text": "Lee Ga Yeon",
+          "normalized": "leegayeon",
+          "kind": "source_birth_name",
+          "priority": 90,
+          "evidence": "https://kprofiles.com/hi-hat-girls-members-profile/"
+        },
+        {
+          "text": "이가연",
+          "normalized": "이가연",
+          "kind": "source_hangul",
+          "priority": 95,
+          "evidence": "https://kprofiles.com/hi-hat-girls-members-profile/"
+        },
+        {
+          "text": "LeeGaYeon",
+          "normalized": "leegayeon",
+          "kind": "generated_format",
+          "priority": 85,
+          "evidence": "remove separators / split hyphens"
+        },
+        {
+          "text": "Ga Yeon",
+          "normalized": "gayeon",
+          "kind": "generated_given_name",
+          "priority": 80,
+          "evidence": "given name candidate by removing first name token"
+        },
+        {
+          "text": "gayeon",
+          "normalized": "gayeon",
+          "kind": "generated_format",
+          "priority": 80,
+          "evidence": "given name without separators"
+        },
+        {
+          "text": "가연",
+          "normalized": "가연",
+          "kind": "generated_given_hangul",
+          "priority": 80,
+          "evidence": "Hangul family-name removal; candidate only"
+        },
+        {
+          "text": "yi Ga Yeon",
+          "normalized": "yigayeon",
+          "kind": "generated_romanization",
+          "priority": 50,
+          "evidence": "family-name spelling variant"
+        },
+        {
+          "text": "yigayeon",
+          "normalized": "yigayeon",
+          "kind": "generated_romanization",
+          "priority": 50,
+          "evidence": "family-name spelling variant"
+        },
+        {
+          "text": "i Ga Yeon",
+          "normalized": "igayeon",
+          "kind": "generated_romanization",
+          "priority": 50,
+          "evidence": "family-name spelling variant"
+        },
+        {
+          "text": "igayeon",
+          "normalized": "igayeon",
+          "kind": "generated_romanization",
+          "priority": 50,
+          "evidence": "family-name spelling variant"
+        },
+        {
+          "text": "gayeon",
+          "normalized": "gayeon",
+          "kind": "generated_hangul_romanization",
+          "priority": 55,
+          "evidence": "syllable transliteration; not a verified artist spelling"
+        },
+        {
+          "text": "Kasia",
+          "normalized": "kasia",
+          "kind": "official_stage",
+          "priority": 110,
+          "evidence": "https://www.genie.co.kr/detail/artistInfo?xxnm=82813665"
+        }
+      ],
+      "chinese_name": null,
+      "chinese_name_status": "pending",
+      "chinese_name_selection": null,
+      "chinese_names": []
+    },
+    {
+      "id": "ifeye:wonhwayeon",
+      "group": "ifeye",
+      "stage_name": "Won Hwayeon",
+      "stage_name_hangul": "원화연",
+      "full_name": "Won Hwa Yeon",
+      "full_name_hangul": "원화연",
+      "historical_section": false,
+      "verification": "community_profile_extracted",
+      "source_url": "https://kprofiles.com/hi-hat-girls-members-profile/",
+      "raw_name_fields": {
+        "birth name": "Won Hwa Yeon (원화연)"
+      },
+      "aliases": [
+        {
+          "text": "Won Hwayeon",
+          "normalized": "wonhwayeon",
+          "kind": "source_stage",
+          "priority": 100,
+          "evidence": "https://kprofiles.com/hi-hat-girls-members-profile/"
+        },
+        {
+          "text": "원화연",
+          "normalized": "원화연",
+          "kind": "source_stage_hangul",
+          "priority": 100,
+          "evidence": "https://kprofiles.com/hi-hat-girls-members-profile/"
+        },
+        {
+          "text": "Won Hwa Yeon",
+          "normalized": "wonhwayeon",
+          "kind": "source_birth_name",
+          "priority": 90,
+          "evidence": "https://kprofiles.com/hi-hat-girls-members-profile/"
+        },
+        {
+          "text": "원화연",
+          "normalized": "원화연",
+          "kind": "source_hangul",
+          "priority": 95,
+          "evidence": "https://kprofiles.com/hi-hat-girls-members-profile/"
+        },
+        {
+          "text": "WonHwayeon",
+          "normalized": "wonhwayeon",
+          "kind": "generated_format",
+          "priority": 85,
+          "evidence": "remove separators / split hyphens"
+        },
+        {
+          "text": "Hwa Yeon",
+          "normalized": "hwayeon",
+          "kind": "generated_given_name",
+          "priority": 80,
+          "evidence": "given name candidate by removing first name token"
+        },
+        {
+          "text": "hwayeon",
+          "normalized": "hwayeon",
+          "kind": "generated_format",
+          "priority": 80,
+          "evidence": "given name without separators"
+        },
+        {
+          "text": "Won Hwayeon",
+          "normalized": "wonhwayeon",
+          "kind": "official_stage",
+          "priority": 110,
+          "evidence": "https://www.genie.co.kr/detail/artistInfo?xxnm=82813665"
+        }
+      ],
+      "chinese_name": null,
+      "chinese_name_status": "pending",
+      "chinese_name_selection": null,
+      "chinese_names": []
+    },
+    {
+      "id": "ifeye:taerin",
+      "group": "ifeye",
+      "stage_name": "Taerin",
+      "stage_name_hangul": "태린",
+      "full_name": "Choi Ji Woo",
+      "full_name_hangul": "최지우",
+      "historical_section": false,
+      "verification": "community_profile_extracted",
+      "source_url": "https://kprofiles.com/hi-hat-girls-members-profile/",
+      "raw_name_fields": {
+        "birth name": "Choi Ji Woo (최지우)"
+      },
+      "aliases": [
+        {
+          "text": "Taerin",
+          "normalized": "taerin",
+          "kind": "source_stage",
+          "priority": 100,
+          "evidence": "https://kprofiles.com/hi-hat-girls-members-profile/"
+        },
+        {
+          "text": "태린",
+          "normalized": "태린",
+          "kind": "source_stage_hangul",
+          "priority": 100,
+          "evidence": "https://kprofiles.com/hi-hat-girls-members-profile/"
+        },
+        {
+          "text": "Choi Ji Woo",
+          "normalized": "choijiwoo",
+          "kind": "source_birth_name",
+          "priority": 90,
+          "evidence": "https://kprofiles.com/hi-hat-girls-members-profile/"
+        },
+        {
+          "text": "최지우",
+          "normalized": "최지우",
+          "kind": "source_hangul",
+          "priority": 95,
+          "evidence": "https://kprofiles.com/hi-hat-girls-members-profile/"
+        },
+        {
+          "text": "ChoiJiWoo",
+          "normalized": "choijiwoo",
+          "kind": "generated_format",
+          "priority": 85,
+          "evidence": "remove separators / split hyphens"
+        },
+        {
+          "text": "Ji Woo",
+          "normalized": "jiwoo",
+          "kind": "generated_given_name",
+          "priority": 80,
+          "evidence": "given name candidate by removing first name token"
+        },
+        {
+          "text": "jiwoo",
+          "normalized": "jiwoo",
+          "kind": "generated_format",
+          "priority": 80,
+          "evidence": "given name without separators"
+        },
+        {
+          "text": "지우",
+          "normalized": "지우",
+          "kind": "generated_given_hangul",
+          "priority": 80,
+          "evidence": "Hangul family-name removal; candidate only"
+        },
+        {
+          "text": "choe Ji Woo",
+          "normalized": "choejiwoo",
+          "kind": "generated_romanization",
+          "priority": 50,
+          "evidence": "family-name spelling variant"
+        },
+        {
+          "text": "choejiwoo",
+          "normalized": "choejiwoo",
+          "kind": "generated_romanization",
+          "priority": 50,
+          "evidence": "family-name spelling variant"
+        },
+        {
+          "text": "jiu",
+          "normalized": "jiu",
+          "kind": "generated_hangul_romanization",
+          "priority": 55,
+          "evidence": "syllable transliteration; not a verified artist spelling"
+        },
+        {
+          "text": "choijiu",
+          "normalized": "choijiu",
+          "kind": "generated_romanization",
+          "priority": 60,
+          "evidence": "search expansion: woo -> u; not an attested alias"
+        },
+        {
+          "text": "jiu",
+          "normalized": "jiu",
+          "kind": "generated_romanization",
+          "priority": 60,
+          "evidence": "search expansion: woo -> u; not an attested alias"
+        },
+        {
+          "text": "Taerin",
+          "normalized": "taerin",
+          "kind": "official_stage",
+          "priority": 110,
+          "evidence": "https://www.genie.co.kr/detail/artistInfo?xxnm=82813665"
+        }
+      ],
+      "chinese_name": null,
+      "chinese_name_status": "pending",
+      "chinese_name_selection": null,
+      "chinese_names": []
+    },
+    {
+      "id": "ifeye:rahee",
+      "group": "ifeye",
+      "stage_name": "Rahee",
+      "stage_name_hangul": "라희",
+      "full_name": "Kim Ra Hee",
+      "full_name_hangul": "김라희",
+      "historical_section": false,
+      "verification": "community_profile_extracted",
+      "source_url": "https://kprofiles.com/hi-hat-girls-members-profile/",
+      "raw_name_fields": {
+        "birth name": "Kim Ra Hee (김라희)"
+      },
+      "aliases": [
+        {
+          "text": "Rahee",
+          "normalized": "rahee",
+          "kind": "source_stage",
+          "priority": 100,
+          "evidence": "https://kprofiles.com/hi-hat-girls-members-profile/"
+        },
+        {
+          "text": "라희",
+          "normalized": "라희",
+          "kind": "source_stage_hangul",
+          "priority": 100,
+          "evidence": "https://kprofiles.com/hi-hat-girls-members-profile/"
+        },
+        {
+          "text": "Kim Ra Hee",
+          "normalized": "kimrahee",
+          "kind": "source_birth_name",
+          "priority": 90,
+          "evidence": "https://kprofiles.com/hi-hat-girls-members-profile/"
+        },
+        {
+          "text": "김라희",
+          "normalized": "김라희",
+          "kind": "source_hangul",
+          "priority": 95,
+          "evidence": "https://kprofiles.com/hi-hat-girls-members-profile/"
+        },
+        {
+          "text": "KimRaHee",
+          "normalized": "kimrahee",
+          "kind": "generated_format",
+          "priority": 85,
+          "evidence": "remove separators / split hyphens"
+        },
+        {
+          "text": "Ra Hee",
+          "normalized": "rahee",
+          "kind": "generated_given_name",
+          "priority": 80,
+          "evidence": "given name candidate by removing first name token"
+        },
+        {
+          "text": "rahee",
+          "normalized": "rahee",
+          "kind": "generated_format",
+          "priority": 80,
+          "evidence": "given name without separators"
+        },
+        {
+          "text": "라희",
+          "normalized": "라희",
+          "kind": "generated_given_hangul",
+          "priority": 80,
+          "evidence": "Hangul family-name removal; candidate only"
+        },
+        {
+          "text": "gim Ra Hee",
+          "normalized": "gimrahee",
+          "kind": "generated_romanization",
+          "priority": 50,
+          "evidence": "family-name spelling variant"
+        },
+        {
+          "text": "gimrahee",
+          "normalized": "gimrahee",
+          "kind": "generated_romanization",
+          "priority": 50,
+          "evidence": "family-name spelling variant"
+        },
+        {
+          "text": "rahui",
+          "normalized": "rahui",
+          "kind": "generated_hangul_romanization",
+          "priority": 55,
+          "evidence": "syllable transliteration; not a verified artist spelling"
+        },
+        {
+          "text": "Rahee",
+          "normalized": "rahee",
+          "kind": "official_stage",
+          "priority": 110,
+          "evidence": "https://www.genie.co.kr/detail/artistInfo?xxnm=82813665"
+        }
+      ],
+      "chinese_name": null,
+      "chinese_name_status": "pending",
+      "chinese_name_selection": null,
+      "chinese_names": []
+    },
+    {
+      "id": "ifeye:meu",
+      "group": "ifeye",
+      "stage_name": "Meu",
+      "stage_name_hangul": "미유",
+      "full_name": "Lee Chae Won",
+      "full_name_hangul": "이채원",
+      "historical_section": false,
+      "verification": "community_profile_extracted",
+      "source_url": "https://kprofiles.com/hi-hat-girls-members-profile/",
+      "raw_name_fields": {
+        "birth name": "Lee Chae Won (이채원)"
+      },
+      "aliases": [
+        {
+          "text": "Meu",
+          "normalized": "meu",
+          "kind": "source_stage",
+          "priority": 100,
+          "evidence": "https://kprofiles.com/hi-hat-girls-members-profile/"
+        },
+        {
+          "text": "미유",
+          "normalized": "미유",
+          "kind": "source_stage_hangul",
+          "priority": 100,
+          "evidence": "https://kprofiles.com/hi-hat-girls-members-profile/"
+        },
+        {
+          "text": "Lee Chae Won",
+          "normalized": "leechaewon",
+          "kind": "source_birth_name",
+          "priority": 90,
+          "evidence": "https://kprofiles.com/hi-hat-girls-members-profile/"
+        },
+        {
+          "text": "이채원",
+          "normalized": "이채원",
+          "kind": "source_hangul",
+          "priority": 95,
+          "evidence": "https://kprofiles.com/hi-hat-girls-members-profile/"
+        },
+        {
+          "text": "LeeChaeWon",
+          "normalized": "leechaewon",
+          "kind": "generated_format",
+          "priority": 85,
+          "evidence": "remove separators / split hyphens"
+        },
+        {
+          "text": "Chae Won",
+          "normalized": "chaewon",
+          "kind": "generated_given_name",
+          "priority": 80,
+          "evidence": "given name candidate by removing first name token"
+        },
+        {
+          "text": "chaewon",
+          "normalized": "chaewon",
+          "kind": "generated_format",
+          "priority": 80,
+          "evidence": "given name without separators"
+        },
+        {
+          "text": "채원",
+          "normalized": "채원",
+          "kind": "generated_given_hangul",
+          "priority": 80,
+          "evidence": "Hangul family-name removal; candidate only"
+        },
+        {
+          "text": "yi Chae Won",
+          "normalized": "yichaewon",
+          "kind": "generated_romanization",
+          "priority": 50,
+          "evidence": "family-name spelling variant"
+        },
+        {
+          "text": "yichaewon",
+          "normalized": "yichaewon",
+          "kind": "generated_romanization",
+          "priority": 50,
+          "evidence": "family-name spelling variant"
+        },
+        {
+          "text": "i Chae Won",
+          "normalized": "ichaewon",
+          "kind": "generated_romanization",
+          "priority": 50,
+          "evidence": "family-name spelling variant"
+        },
+        {
+          "text": "ichaewon",
+          "normalized": "ichaewon",
+          "kind": "generated_romanization",
+          "priority": 50,
+          "evidence": "family-name spelling variant"
+        },
+        {
+          "text": "chaewon",
+          "normalized": "chaewon",
+          "kind": "generated_hangul_romanization",
+          "priority": 55,
+          "evidence": "syllable transliteration; not a verified artist spelling"
+        },
+        {
+          "text": "Meu",
+          "normalized": "meu",
+          "kind": "official_stage",
+          "priority": 110,
+          "evidence": "https://www.genie.co.kr/detail/artistInfo?xxnm=82813665"
+        }
+      ],
+      "chinese_name": null,
+      "chinese_name_status": "pending",
+      "chinese_name_selection": null,
+      "chinese_names": []
+    },
+    {
+      "id": "ifeye:sasha",
+      "group": "ifeye",
+      "stage_name": "Sasha",
+      "stage_name_hangul": "사샤",
+      "full_name": "Jeong Seo Yul",
+      "full_name_hangul": "정서율",
+      "historical_section": false,
+      "verification": "community_profile_extracted",
+      "source_url": "https://kprofiles.com/hi-hat-girls-members-profile/",
+      "raw_name_fields": {
+        "birth name": "Jeong Seo Yul (정서율)"
+      },
+      "aliases": [
+        {
+          "text": "Sasha",
+          "normalized": "sasha",
+          "kind": "source_stage",
+          "priority": 100,
+          "evidence": "https://kprofiles.com/hi-hat-girls-members-profile/"
+        },
+        {
+          "text": "사샤",
+          "normalized": "사샤",
+          "kind": "source_stage_hangul",
+          "priority": 100,
+          "evidence": "https://kprofiles.com/hi-hat-girls-members-profile/"
+        },
+        {
+          "text": "Jeong Seo Yul",
+          "normalized": "jeongseoyul",
+          "kind": "source_birth_name",
+          "priority": 90,
+          "evidence": "https://kprofiles.com/hi-hat-girls-members-profile/"
+        },
+        {
+          "text": "정서율",
+          "normalized": "정서율",
+          "kind": "source_hangul",
+          "priority": 95,
+          "evidence": "https://kprofiles.com/hi-hat-girls-members-profile/"
+        },
+        {
+          "text": "JeongSeoYul",
+          "normalized": "jeongseoyul",
+          "kind": "generated_format",
+          "priority": 85,
+          "evidence": "remove separators / split hyphens"
+        },
+        {
+          "text": "Seo Yul",
+          "normalized": "seoyul",
+          "kind": "generated_given_name",
+          "priority": 80,
+          "evidence": "given name candidate by removing first name token"
+        },
+        {
+          "text": "seoyul",
+          "normalized": "seoyul",
+          "kind": "generated_format",
+          "priority": 80,
+          "evidence": "given name without separators"
+        },
+        {
+          "text": "서율",
+          "normalized": "서율",
+          "kind": "generated_given_hangul",
+          "priority": 80,
+          "evidence": "Hangul family-name removal; candidate only"
+        },
+        {
+          "text": "jung Seo Yul",
+          "normalized": "jungseoyul",
+          "kind": "generated_romanization",
+          "priority": 50,
+          "evidence": "family-name spelling variant"
+        },
+        {
+          "text": "jungseoyul",
+          "normalized": "jungseoyul",
+          "kind": "generated_romanization",
+          "priority": 50,
+          "evidence": "family-name spelling variant"
+        },
+        {
+          "text": "seoyul",
+          "normalized": "seoyul",
+          "kind": "generated_hangul_romanization",
+          "priority": 55,
+          "evidence": "syllable transliteration; not a verified artist spelling"
+        },
+        {
+          "text": "Sasha",
+          "normalized": "sasha",
+          "kind": "official_stage",
+          "priority": 110,
+          "evidence": "https://www.genie.co.kr/detail/artistInfo?xxnm=82813665"
+        }
+      ],
+      "chinese_name": null,
+      "chinese_name_status": "pending",
+      "chinese_name_selection": null,
+      "chinese_names": []
     }
   ],
   "alias_index": {
@@ -77045,6 +77694,7 @@
       "april:chaewon",
       "classy:chaewon",
       "dia:eunchae",
+      "ifeye:meu",
       "izone:chaewon",
       "lesserafim:kimchaewon",
       "loona:gowon",
@@ -77055,6 +77705,7 @@
       "april:chaewon",
       "classy:chaewon",
       "dia:eunchae",
+      "ifeye:meu",
       "izone:chaewon",
       "lesserafim:kimchaewon",
       "loona:gowon",
@@ -77492,6 +78143,7 @@
     ],
     "jiwoo": [
       "hearts2hearts:jiwoo",
+      "ifeye:taerin",
       "kiiikiii:kya",
       "loona:chuu",
       "nmixx:jiwoo",
@@ -77499,6 +78151,7 @@
     ],
     "지우": [
       "hearts2hearts:jiwoo",
+      "ifeye:taerin",
       "kiiikiii:kya",
       "loona:chuu",
       "nmixx:jiwoo",
@@ -77519,6 +78172,7 @@
     "jiu": [
       "dreamcatcher:jiu",
       "hearts2hearts:jiwoo",
+      "ifeye:taerin",
       "kiiikiii:kya",
       "loona:chuu",
       "nmixx:jiwoo",
@@ -78105,16 +78759,20 @@
       "meovv:ella"
     ],
     "choijiwoo": [
-      "hearts2hearts:jiwoo"
+      "hearts2hearts:jiwoo",
+      "ifeye:taerin"
     ],
     "최지우": [
-      "hearts2hearts:jiwoo"
+      "hearts2hearts:jiwoo",
+      "ifeye:taerin"
     ],
     "choejiwoo": [
-      "hearts2hearts:jiwoo"
+      "hearts2hearts:jiwoo",
+      "ifeye:taerin"
     ],
     "choijiu": [
-      "hearts2hearts:jiwoo"
+      "hearts2hearts:jiwoo",
+      "ifeye:taerin"
     ],
     "carmen": [
       "hearts2hearts:carmen"
@@ -85529,6 +86187,7 @@
       "madein:miu"
     ],
     "미유": [
+      "ifeye:meu",
       "limelight:miu",
       "madein:miu"
     ],
@@ -87333,10 +87992,12 @@
       "berrygood:daye"
     ],
     "seoyul": [
-      "berrygood:seoyul"
+      "berrygood:seoyul",
+      "ifeye:sasha"
     ],
     "서율": [
-      "berrygood:seoyul"
+      "berrygood:seoyul",
+      "ifeye:sasha"
     ],
     "seoyuri": [
       "berrygood:seoyul"
@@ -88138,6 +88799,93 @@
     ],
     "choeyujeong": [
       "pixy:lola"
+    ],
+    "kasia": [
+      "ifeye:kasia"
+    ],
+    "카시아": [
+      "ifeye:kasia"
+    ],
+    "leegayeon": [
+      "ifeye:kasia"
+    ],
+    "이가연": [
+      "ifeye:kasia"
+    ],
+    "gayeon": [
+      "ifeye:kasia"
+    ],
+    "가연": [
+      "ifeye:kasia"
+    ],
+    "yigayeon": [
+      "ifeye:kasia"
+    ],
+    "igayeon": [
+      "ifeye:kasia"
+    ],
+    "wonhwayeon": [
+      "ifeye:wonhwayeon"
+    ],
+    "원화연": [
+      "ifeye:wonhwayeon"
+    ],
+    "hwayeon": [
+      "ifeye:wonhwayeon"
+    ],
+    "taerin": [
+      "ifeye:taerin"
+    ],
+    "태린": [
+      "ifeye:taerin"
+    ],
+    "rahee": [
+      "ifeye:rahee"
+    ],
+    "라희": [
+      "ifeye:rahee"
+    ],
+    "kimrahee": [
+      "ifeye:rahee"
+    ],
+    "김라희": [
+      "ifeye:rahee"
+    ],
+    "gimrahee": [
+      "ifeye:rahee"
+    ],
+    "rahui": [
+      "ifeye:rahee"
+    ],
+    "meu": [
+      "ifeye:meu"
+    ],
+    "leechaewon": [
+      "ifeye:meu"
+    ],
+    "이채원": [
+      "ifeye:meu"
+    ],
+    "yichaewon": [
+      "ifeye:meu"
+    ],
+    "ichaewon": [
+      "ifeye:meu"
+    ],
+    "sasha": [
+      "ifeye:sasha"
+    ],
+    "사샤": [
+      "ifeye:sasha"
+    ],
+    "jeongseoyul": [
+      "ifeye:sasha"
+    ],
+    "정서율": [
+      "ifeye:sasha"
+    ],
+    "jungseoyul": [
+      "ifeye:sasha"
     ]
   },
   "ambiguous_aliases": {
@@ -88589,6 +89337,7 @@
       "april:chaewon",
       "classy:chaewon",
       "dia:eunchae",
+      "ifeye:meu",
       "izone:chaewon",
       "lesserafim:kimchaewon",
       "loona:gowon",
@@ -88599,6 +89348,7 @@
       "april:chaewon",
       "classy:chaewon",
       "dia:eunchae",
+      "ifeye:meu",
       "izone:chaewon",
       "lesserafim:kimchaewon",
       "loona:gowon",
@@ -88730,6 +89480,7 @@
     ],
     "jiwoo": [
       "hearts2hearts:jiwoo",
+      "ifeye:taerin",
       "kiiikiii:kya",
       "loona:chuu",
       "nmixx:jiwoo",
@@ -88737,6 +89488,7 @@
     ],
     "지우": [
       "hearts2hearts:jiwoo",
+      "ifeye:taerin",
       "kiiikiii:kya",
       "loona:chuu",
       "nmixx:jiwoo",
@@ -88757,6 +89509,7 @@
     "jiu": [
       "dreamcatcher:jiu",
       "hearts2hearts:jiwoo",
+      "ifeye:taerin",
       "kiiikiii:kya",
       "loona:chuu",
       "nmixx:jiwoo",
@@ -88897,6 +89650,22 @@
     "엘라": [
       "meovv:ella",
       "pixy:ella"
+    ],
+    "choijiwoo": [
+      "hearts2hearts:jiwoo",
+      "ifeye:taerin"
+    ],
+    "최지우": [
+      "hearts2hearts:jiwoo",
+      "ifeye:taerin"
+    ],
+    "choejiwoo": [
+      "hearts2hearts:jiwoo",
+      "ifeye:taerin"
+    ],
+    "choijiu": [
+      "hearts2hearts:jiwoo",
+      "ifeye:taerin"
     ],
     "yuha": [
       "hearts2hearts:yuha",
@@ -91013,6 +91782,7 @@
       "madein:miu"
     ],
     "미유": [
+      "ifeye:meu",
       "limelight:miu",
       "madein:miu"
     ],
@@ -91111,6 +91881,14 @@
     "린지": [
       "fiestar:linzy",
       "pixy:rinji"
+    ],
+    "seoyul": [
+      "berrygood:seoyul",
+      "ifeye:sasha"
+    ],
+    "서율": [
+      "berrygood:seoyul",
+      "ifeye:sasha"
     ]
   },
   "fetch_failures": []

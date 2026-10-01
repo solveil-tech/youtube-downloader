@@ -52,7 +52,7 @@ def member_display_name(member):
         "jang", "chang", "oh", "an", "ahn", "kang", "gang", "shin", "sin", "yoon", "yun", "seo", "suh",
         "han", "baek", "paek", "roh", "ro", "no", "song", "nam", "son", "moon", "mun", "cho", "jo",
         "kwon", "gwon", "lim", "im", "eom", "um", "heo", "huh", "ko", "go", "hwang", "na", "ha",
-        "cha", "woo", "yoo", "yu", "seol", "sul", "bae", "sim", "shim"}
+        "cha", "woo", "yoo", "yu", "seol", "sul", "bae", "sim", "shim", "won"}
     # A Western name can also have a Hangul transcription. That alone does not make
     # it a Korean family-first name; preserve source spelling in that case.
     if surname in korean_surnames and re.fullmatch(r"[가-힣]{3,4}", hangul.replace(" ", "")):
