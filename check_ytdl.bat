@@ -28,7 +28,7 @@ if errorlevel 1 (
 )
 
 echo [2/3] Checking ytdl.py syntax and imports...
-"%CHECK_PYTHON%" -m py_compile "ytdl.py"
+"%CHECK_PYTHON%" -m py_compile "ytdl.py" "idol_search.py" "media_library.py" "youtube_search.py"
 if errorlevel 1 (
     echo.
     echo [FAILED] Syntax check failed.
@@ -43,7 +43,38 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo [3/3] Starting the source version...
+if not exist "idol_names\idol_aliases.json" (
+    echo [FAILED] idol_names\idol_aliases.json is missing.
+    pause
+    exit /b 1
+)
+"%CHECK_PYTHON%" -X utf8 "check_idol_search.py"
+if errorlevel 1 (
+    echo [FAILED] Idol search checks failed.
+    pause
+    exit /b 1
+)
+"%CHECK_PYTHON%" -X utf8 "check_media_library.py"
+if errorlevel 1 (
+    echo [FAILED] Media library checks failed.
+    pause
+    exit /b 1
+)
+"%CHECK_PYTHON%" -X utf8 "check_search_ui.py"
+if errorlevel 1 (
+    echo [FAILED] Search UI check failed.
+    pause
+    exit /b 1
+)
+
+echo [3/3] Starting the source version with idol search...
+"%CHECK_PYTHON%" -X utf8 "check_batch_download.py"
+if errorlevel 1 (
+    echo [FAILED] Batch download check failed.
+    pause
+    exit /b 1
+)
+echo Enter a group or member and a YYMMDD date, then click Search.
 echo Close the application window to finish this check.
 "%CHECK_PYTHON%" "ytdl.py"
 set "APP_EXIT=%ERRORLEVEL%"

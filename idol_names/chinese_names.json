@@ -1,0 +1,102 @@
+{
+  "as_of": "2026-10-01",
+  "policy": "Official usage outranks community usage. Counts mean distinct cited pages, not internet-wide popularity. Simplified equivalents are display/search conversions, not new official attestations. Missing entries remain pending.",
+  "sources": {
+    "fromis_weibo": {"url": "https://weibo.com/officialfromis9", "type": "official_account_usage", "method": "Indexed account posts pair English member names with Chinese hashtags; account is also linked by the group encyclopedia. Usage does not prove legal Hanzi or exclusive spelling.", "identity_reference": "https://zh.wikipedia.org/wiki/Fromis_9"},
+    "fromis_wiki": {"url": "https://zh.wikipedia.org/wiki/Fromis_9", "type": "community_reference"},
+    "twice_wiki": {"url": "https://zh.wikipedia.org/wiki/TWICE", "type": "community_reference"},
+    "ive_wiki": {"url": "https://zh.wikipedia.org/wiki/IVE", "type": "community_reference"},
+    "lsf_wiki": {"url": "https://zh.wikipedia.org/wiki/LE_SSERAFIM", "type": "community_reference"},
+    "aespa_wiki": {"url": "https://zh.wikipedia.org/wiki/Aespa", "type": "community_reference"},
+    "itzy_wiki": {"url": "https://zh.wikipedia.org/wiki/ITZY", "type": "community_reference"},
+    "winter_fan": {"url": "https://weibo.com/2/detail/5343727069429921", "type": "fan_usage", "method": "Fan account uses 金玟庭 as a hashtag; not an official confirmation."}
+  },
+  "batches": [
+    {
+      "source": "fromis_weibo", "status": "official_usage",
+      "names": [
+        ["fromis9:hayoung", "宋河英", "宋河英"],
+        ["fromis9:jiwon", "朴池原", "朴池原"],
+        ["fromis9:chaeyoung", "李采映", "李采映"],
+        ["fromis9:nagyung", "李娜炅", "李娜炅"],
+        ["fromis9:jiheon", "白知宪", "白知宪"]
+      ]
+    },
+    {
+      "source": "fromis_wiki", "status": "community_usage",
+      "names": [
+        ["fromis9:hayoung", "宋河英", "宋河英"],
+        ["fromis9:jiwon", "朴池原", "朴池原"],
+        ["fromis9:chaeyoung", "李彩煐", "李彩煐"],
+        ["fromis9:nagyung", "李娜炅", "李娜炅"],
+        ["fromis9:jiheon", "白知憲", "白知宪"],
+        ["fromis9:saerom", "李賽綸", "李赛纶"],
+        ["fromis9:gyuri", "張圭悧", "张圭悧"],
+        ["fromis9:jisun", "盧知宣", "卢知宣"],
+        ["fromis9:seoyeon", "李瑞淵", "李瑞渊"]
+      ]
+    },
+    {
+      "source": "twice_wiki", "status": "community_usage",
+      "names": [
+        ["twice:nayeon", "林娜璉", "林娜琏"],
+        ["twice:jeongyeon", "俞定延", "俞定延"],
+        ["twice:jeongyeon", "兪定延", "兪定延"],
+        ["twice:momo", "平井桃", "平井桃"],
+        ["twice:sana", "湊崎紗夏", "凑崎纱夏"],
+        ["twice:jihyo", "朴志效", "朴志效"],
+        ["twice:mina", "名井南", "名井南"],
+        ["twice:dahyun", "金多賢", "金多贤"],
+        ["twice:chaeyoung", "孫彩瑛", "孙彩瑛"],
+        ["twice:tzuyu", "周子瑜", "周子瑜"]
+      ]
+    },
+    {
+      "source": "ive_wiki", "status": "community_usage",
+      "names": [
+        ["ive:anyujin", "安兪眞", "安兪真"],
+        ["ive:anyujin", "安俞真", "安俞真"],
+        ["ive:gaeul", "秋天", "秋天"],
+        ["ive:rei", "直井怜", "直井怜"],
+        ["ive:jangwonyoung", "張員瑛", "张员瑛"],
+        ["ive:liz", "金志垣", "金志垣"],
+        ["ive:leeseo", "李賢瑞", "李贤瑞"]
+      ]
+    },
+    {
+      "source": "lsf_wiki", "status": "community_usage",
+      "names": [
+        ["lesserafim:kimchaewon", "金采源", "金采源"],
+        ["lesserafim:sakura", "宮脇咲良", "宫脇咲良"],
+        ["lesserafim:huhyunjin", "許允眞", "许允真"],
+        ["lesserafim:huhyunjin", "許允真", "许允真"],
+        ["lesserafim:kazuha", "中村一葉", "中村一叶"],
+        ["lesserafim:hongeunchae", "洪恩採", "洪恩采"],
+        ["lesserafim:kimgaram", "金佳覽", "金佳览"]
+      ]
+    },
+    {
+      "source": "aespa_wiki", "status": "community_usage",
+      "names": [
+        ["aespa:karina", "劉知珉", "刘知珉"],
+        ["aespa:giselle", "内永枝利", "内永枝利"],
+        ["aespa:winter", "金旼炡", "金旼炡"],
+        ["aespa:ningning", "寧藝卓", "宁艺卓"]
+      ]
+    },
+    {
+      "source": "winter_fan", "status": "community_usage",
+      "names": [["aespa:winter", "金玟庭", "金玟庭"]]
+    },
+    {
+      "source": "itzy_wiki", "status": "community_usage",
+      "names": [
+        ["itzy:yeji", "黃禮志", "黄礼志"],
+        ["itzy:lia", "崔智壽", "崔智寿"],
+        ["itzy:ryujin", "申留眞", "申留真"],
+        ["itzy:chaeryeong", "李彩領", "李彩领"],
+        ["itzy:yuna", "申有娜", "申有娜"]
+      ]
+    }
+  ]
+}

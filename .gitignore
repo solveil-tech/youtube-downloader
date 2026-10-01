@@ -15,3 +15,5 @@ __pycache__/
 build/
 dist/
 *.spec.bak
+.media-library-cache.json
+.download-source-index.json

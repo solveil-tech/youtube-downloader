@@ -1,0 +1,87 @@
+[
+  {
+    "member_id": "wondergirls:sunye",
+    "set_fields": {"stage_name_hangul": "선예"},
+    "remove_aliases": ["순예"],
+    "aliases": [
+      {"text": "선예", "source_url": "https://kprofiles.com/sunye-profile-and-facts/"}
+    ]
+  },
+  {
+    "member_id": "wjsn:xuanyi",
+    "set_fields": {"stage_name_hangul": "선의"},
+    "aliases": [
+      {"text": "선의", "source_url": "https://wjsn.fandom.com/wiki/Xuan_Yi"},
+      {"text": "Xuanyi", "source_url": "https://wjsn.fandom.com/wiki/Xuan_Yi"},
+      {"text": "Wu Xuanyi", "source_url": "https://wjsn.fandom.com/wiki/Xuan_Yi"}
+    ]
+  },
+  {
+    "member_id": "weeekly:lunedi",
+    "aliases": [
+      {"text": "Monday", "source_url": "https://kprofiles.com/weeekly-members-profile/"},
+      {"text": "먼데이", "source_url": "https://kprofiles.com/monday-weeekly-profile/"}
+    ]
+  },
+  {
+    "member_id": "exid:elly",
+    "aliases": [
+      {"text": "LE", "source_url": "https://kprofiles.com/le-exid-profile/"},
+      {"text": "엘리", "source_url": "https://kprofiles.com/le-exid-profile/"}
+    ]
+  },
+  {
+    "member_id": "babymonster:rami",
+    "aliases": [
+      {"text": "Haram", "source_url": "https://kprofiles.com/babymonster-members-profile/"},
+      {"text": "하람", "source_url": "https://kprofiles.com/babymonster-members-profile/"}
+    ]
+  },
+  {
+    "member_id": "loona:hyeju",
+    "aliases": [
+      {"text": "Olivia Hye", "source_url": "https://kprofiles.com/loona-members-profile/"},
+      {"text": "올리비아 혜", "source_url": "https://kprofiles.com/loona-members-profile/"}
+    ]
+  },
+  {
+    "member_id": "katseye:daniela",
+    "set_fields": {"stage_name_hangul": "다니엘라"},
+    "aliases": [
+      {"text": "다니엘라", "kind": "official_stage_hangul", "source_url": "https://weverse.io/katseye/media/3-134778902"},
+      {"text": "Daniela Avanzini", "source_url": "https://apnews.com/article/9b42686b193b16150fdc6371bca1dee1"}
+    ]
+  },
+  {
+    "member_id": "katseye:lara",
+    "set_fields": {"stage_name_hangul": "라라"},
+    "aliases": [
+      {"text": "라라", "kind": "official_stage_hangul", "source_url": "https://weverse.io/katseye/live?hl=ko"},
+      {"text": "Lara Raj", "source_url": "https://apnews.com/article/9b42686b193b16150fdc6371bca1dee1"}
+    ]
+  },
+  {
+    "member_id": "katseye:megan",
+    "set_fields": {"stage_name_hangul": "메간"},
+    "aliases": [
+      {"text": "메간", "kind": "official_stage_hangul", "source_url": "https://weverse.io/katseye/live?hl=ko"},
+      {"text": "Megan Skiendiel", "source_url": "https://apnews.com/article/9b42686b193b16150fdc6371bca1dee1"}
+    ]
+  },
+  {
+    "member_id": "katseye:manon",
+    "set_fields": {"stage_name_hangul": "마농"},
+    "aliases": [
+      {"text": "마농", "kind": "official_stage_hangul", "source_url": "https://weverse.io/katseye/live?hl=ko"},
+      {"text": "Manon Bannerman", "source_url": "https://apnews.com/article/9b42686b193b16150fdc6371bca1dee1"}
+    ]
+  },
+  {
+    "member_id": "katseye:sophia",
+    "set_fields": {"stage_name_hangul": "소피아"},
+    "aliases": [
+      {"text": "소피아", "kind": "official_stage_hangul", "source_url": "https://weverse.io/katseye/live?hl=ko"},
+      {"text": "Sophia Laforteza", "source_url": "https://apnews.com/article/9b42686b193b16150fdc6371bca1dee1"}
+    ]
+  }
+]
