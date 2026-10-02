@@ -73,8 +73,8 @@ with tempfile.TemporaryDirectory(dir=Path(__file__).parent / ".checkenv") as tem
     assert window.idol_edit.text() == before_text, "Hover changed selected identity"
     completion.hide()
     window.update_member_candidates()
-    assert window.search_card.layout().indexOf(window.search_results_arrow) + 1 == window.search_card.layout().indexOf(window.search_clear_btn)
-    assert window.search_card.layout().indexOf(window.search_clear_btn) + 1 == window.search_card.layout().indexOf(window.search_btn)
+    assert window.search_card.layout().indexOf(window.search_results_arrow) + 1 == window.search_card.layout().indexOf(window.search_btn)
+    assert window.search_card.layout().indexOf(window.search_btn) + 1 == window.search_card.layout().indexOf(window.search_clear_btn)
     assert window.group_edit.text() == "NMIXX", "Actual dropdown selection did not fill group"
     assert window.idol_edit.text() == "Jang Kyujin", "Completion label leaked into input"
 
@@ -190,6 +190,13 @@ with tempfile.TemporaryDirectory(dir=Path(__file__).parent / ".checkenv") as tem
         assert last.bottom() < window.centralWidget().height()
         window.clip_panel.show()
         app.processEvents()
+        window.range_label.setText("00:01.234 → 03:45.678")
+        app.processEvents()
+        assert abs(window.idol_edit.width() - window.group_edit.width()) <= 1
+        assert abs(window.search_date_edit.width() - window.group_edit.width()) <= 1
+        assert window.search_btn.width() > window.search_clear_btn.width()
+        assert window.audio_combo.geometry().top() - window.range_label.geometry().bottom() >= 4
+        assert window.download_btn.geometry().top() - window.audio_combo.geometry().bottom() >= 4
         assert window.search_card.geometry().bottom() < window.cover_frame.mapTo(window.centralWidget(), window.cover_frame.rect().topLeft()).y()
         window.clip_panel.hide()
     output = Path(__file__).parent / ".checkenv" / "search-ui-check.png"

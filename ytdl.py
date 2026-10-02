@@ -730,12 +730,16 @@ class SearchResultsPopup(QFrame):
 class PreviewCacheWorker(QThread):
     ready = pyqtSignal(str)
     failed = pyqtSignal(str)
+    target_locks = {}
+    target_locks_guard = Lock()
 
     def __init__(self, url, format_id, target):
         super().__init__()
         self.url = url
         self.format_id = str(format_id)
         self.target = Path(target)
+        with self.target_locks_guard:
+            self.target_lock = self.target_locks.setdefault(str(self.target.resolve()), Lock())
         self.process = None
         self.stop_requested = False
 
@@ -779,6 +783,16 @@ class PreviewCacheWorker(QThread):
                     pass
 
     def run(self):
+        while not self.stop_requested:
+            if self.target_lock.acquire(timeout=0.1):
+                try:
+                    if not self.stop_requested:
+                        self.download_cache()
+                finally:
+                    self.target_lock.release()
+                return
+
+    def download_cache(self):
         try:
             self.target.parent.mkdir(parents=True, exist_ok=True)
             if self.target.exists() and self.target.stat().st_size > 0:
@@ -786,7 +800,7 @@ class PreviewCacheWorker(QThread):
                 self.ready.emit(str(self.target))
                 return
             command = [
-                str(engine_path()), self.url, "--no-playlist", "--no-warnings", "--no-color",
+                str(engine_path()), "--ignore-config", self.url, "--no-playlist", "--no-warnings", "--no-color",
                 "--continue", "--format", self.format_id, "--output", str(self.target),
                 "--retries", "2", "--fragment-retries", "2", "--socket-timeout", "20",
             ]
@@ -798,16 +812,26 @@ class PreviewCacheWorker(QThread):
             cookie = cookie_path()
             if cookie:
                 command += ["--cookies", str(cookie)]
-            self.process = subprocess.Popen(
-                command,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE,
-                text=True,
-                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
-            )
-            _stdout, stderr = self.process.communicate()
-            if self.stop_requested:
-                return
+            for attempt in range(3):
+                if self.stop_requested:
+                    return
+                self.process = subprocess.Popen(
+                    command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                    text=True, encoding="utf-8", errors="replace",
+                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+                )
+                if self.stop_requested:
+                    self.request_stop()
+                    return
+                _stdout, stderr = self.process.communicate()
+                if self.stop_requested:
+                    return
+                if self.process.returncode == 0:
+                    break
+                transient = any(word in (stderr or "").lower() for word in (
+                    "403", "429", "timed out", "timeout", "connection reset", "502", "503", "504"))
+                if not transient or attempt == 2:
+                    break
             if self.process.returncode != 0 or not self.target.exists():
                 raise RuntimeError((stderr or tr("preview_cache_failed")).strip()[-500:])
             self.clean_cache()
@@ -2230,6 +2254,7 @@ class YoutubeDownloader(QMainWindow):
         saved_language = str(self.settings.value("language", "zh"))
         CURRENT_LANGUAGE = saved_language if saved_language in LANGUAGE_CODES else "zh"
         self.info, self.thumbnail_bytes, self.pending_download = None, b"", None
+        self.parsed_video_url = ""
         self.info_worker = None
         self.batch_worker = None
         self.batch_items = []
@@ -2322,17 +2347,17 @@ class YoutubeDownloader(QMainWindow):
             edit.setMinimumWidth(0)
             edit.setClearButtonEnabled(True)
         self.search_date_edit.setMaxLength(6)
-        self.search_date_edit.setMaximumWidth(185)
         self.search_spinner = LoadingSpinner()
         row.addWidget(self.group_edit, 2)
-        row.addWidget(self.idol_edit, 3)
+        row.addWidget(self.idol_edit, 2)
         row.addWidget(self.search_date_edit, 2)
         row.addWidget(self.search_spinner)
         row.addWidget(self.search_results_arrow)
         self.search_clear_btn = QPushButton()
         self.search_clear_btn.clicked.connect(self.clear_search_inputs)
-        row.addWidget(self.search_clear_btn)
         row.addWidget(self.search_btn)
+        row.addWidget(self.search_clear_btn)
+        self.search_btn.setObjectName("primary")
         page.addWidget(self.search_card)
         self.group_model, self.member_model = QStringListModel(self), QStringListModel(self)
         self.group_completer, self.member_completer = QCompleter(self.group_model, self), QCompleter(self.member_model, self)
@@ -2903,6 +2928,8 @@ class YoutubeDownloader(QMainWindow):
                 label.setPixmap(pixmap)
 
     def parse_search_result(self, url):
+        if self.batch_worker is not None:
+            return
         if self.info_worker is not None and self.info_worker.isRunning():
             return
         self.results_popup.hide()
@@ -3069,7 +3096,7 @@ class YoutubeDownloader(QMainWindow):
         body.addWidget(left_card, 5)
 
         right_card = QFrame()
-        right_card.setObjectName("card")
+        right_card.setObjectName("optionsCard")
         right = QVBoxLayout(right_card)
         self.right_layout = right
         right.setContentsMargins(16, 16, 16, 16)
@@ -3080,13 +3107,11 @@ class YoutubeDownloader(QMainWindow):
         self.format_combo.setEnabled(False)
         self.format_combo.setMaxVisibleItems(14)
         right.addWidget(self.format_combo)
-        right.addSpacing(4)
         self.filename_section = self.section_label(tr("filename"))
         right.addWidget(self.filename_section)
         self.filename_edit = QLineEdit()
         self.filename_edit.setPlaceholderText(tr("filename_placeholder"))
         right.addWidget(self.filename_edit)
-        right.addSpacing(4)
         self.range_section = self.section_label(tr("download_range"))
         right.addWidget(self.range_section)
         self.range_combo = ChevronComboBox()
@@ -3311,8 +3336,8 @@ class YoutubeDownloader(QMainWindow):
         self.body_layout.setSpacing(max(10, round(16 * scale)))
         margins(self.left_layout, (16, 16, 16, 16))
         self.left_layout.setSpacing(max(6, round(9 * scale)))
-        margins(self.right_layout, (16, 16, 16, 16))
-        self.right_layout.setSpacing(max(7, round(10 * scale)))
+        margins(self.right_layout, (16, 12, 16, 12))
+        self.right_layout.setSpacing(max(4, round(6 * scale)))
         self.bottom_layout.setSpacing(max(10, round(16 * scale)))
         margins(self.task_box_layout, (14, 12, 14, 12))
         margins(self.clip_box_layout, (14, 12, 14, 12))
@@ -3326,6 +3351,9 @@ class YoutubeDownloader(QMainWindow):
         self.brand_subtitle.setMinimumHeight(max(17, round(20 * scale)))
         self.task_scroll.setMinimumHeight(max(150, round(210 * scale)))
         self.download_btn.setMinimumHeight(max(31, round(42 * scale)))
+        self.range_label.setMinimumHeight(0)
+        self.search_clear_btn.setFixedWidth(max(54, round(72 * scale)))
+        self.search_btn.setFixedWidth(max(64, round(86 * scale)))
         self.clip_video.setMinimumHeight(max(122, round(170 * scale)))
         self.clip_timeline.set_scale(scale)
         self.loading_spinner.set_scale(scale)
@@ -3337,9 +3365,16 @@ class YoutubeDownloader(QMainWindow):
         self.concurrency_combo.set_scale(scale)
         for label in self.section_labels:
             label.setMinimumHeight(max(20, round(26 * scale)))
+        for label in (self.format_section, self.filename_section, self.range_section):
+            label.setMinimumHeight(max(16, round(24 * scale)))
         for _manager, card in self.tasks:
             card.set_scale(scale)
         self.apply_style(scale)
+        self.range_label.setMinimumHeight(self.range_label.fontMetrics().height())
+        # Reserve the options panel's real minimum height, including styled
+        # controls, so Qt cannot compress its final rows into one another.
+        self.right_layout.invalidate()
+        self.right_layout.parentWidget().setMinimumHeight(self.right_layout.minimumSize().height())
 
     def toggle_theme(self):
         self.dark_mode = not self.dark_mode
@@ -3459,7 +3494,7 @@ class YoutubeDownloader(QMainWindow):
         self.search_results_arrow.set_theme(self.dark_mode)
         self.setStyleSheet(f"""
             QMainWindow, QWidget {{ background:{bg}; color:{text}; font-family:'Segoe UI','Microsoft YaHei UI'; font-size:{px(13, 10)}px; }}
-            QFrame#card, QFrame#taskCard {{ background:{card}; border:1px solid {border}; border-radius:{px(12, 8)}px; }}
+            QFrame#card, QFrame#optionsCard, QFrame#taskCard {{ background:{card}; border:1px solid {border}; border-radius:{px(12, 8)}px; }}
             QFrame#taskCard[failed="true"] {{ background:{danger_bg}; border:1px solid {DANGER}; }}
             QFrame#taskCard[failed="true"] QLabel {{ background:transparent; }}
             QLabel#appTitle {{ font-family:'Eras Demi ITC'; font-size:{px(31, 23)}px; font-weight:400; }}
@@ -3471,6 +3506,7 @@ class YoutubeDownloader(QMainWindow):
             QLabel#sectionTitle[plain="true"] {{ background:transparent; }}
             QLineEdit, QComboBox {{ background:{field}; border:1px solid {border}; border-radius:{px(7, 5)}px; padding:{px(8, 5)}px {px(10, 7)}px; min-height:{px(20, 15)}px; }}
             QLineEdit:focus, QComboBox:focus {{ border:1px solid {accent}; }}
+            QFrame#optionsCard QLineEdit, QFrame#optionsCard QComboBox {{ padding-top:{px(5, 2)}px; padding-bottom:{px(5, 2)}px; min-height:{px(18, 13)}px; }}
             QComboBox {{ padding-right:{px(30, 22)}px; }}
             QComboBox::drop-down {{ subcontrol-origin:padding; subcontrol-position:top right; width:{px(28, 21)}px; border:0; background:transparent; }}
             QComboBox::down-arrow {{ image:none; width:0; height:0; }}
@@ -3670,7 +3706,10 @@ class YoutubeDownloader(QMainWindow):
             self.range_label.setToolTip(tr("preview_cache_ready"))
             return
         self.range_label.setToolTip(tr("preview_cache_loading"))
-        worker = PreviewCacheWorker(self.url_edit.text().strip(), fmt["selector"], target)
+        url = (self.info or {}).get("webpage_url") or self.parsed_video_url
+        if not is_supported_url(url):
+            return
+        worker = PreviewCacheWorker(url, fmt["selector"], target)
         self.preview_cache_worker = worker
         worker.ready.connect(self.preview_cache_ready)
         worker.failed.connect(self.preview_cache_failed)
@@ -3678,6 +3717,8 @@ class YoutubeDownloader(QMainWindow):
         worker.start()
 
     def preview_cache_ready(self, path):
+        if isinstance(self.sender(), PreviewCacheWorker) and self.sender() is not self.preview_cache_worker:
+            return
         target = Path(path)
         if target.exists() and target.stat().st_size > 0:
             self.preview_cache_path = target
@@ -3695,6 +3736,8 @@ class YoutubeDownloader(QMainWindow):
                 self.preview_player.setSource(QUrl.fromLocalFile(str(target)))
 
     def preview_cache_failed(self, message):
+        if isinstance(self.sender(), PreviewCacheWorker) and self.sender() is not self.preview_cache_worker:
+            return
         self.preview_cache_error = message
         self.preview_cache_path = None
         self.range_label.setToolTip(message)
@@ -3721,12 +3764,16 @@ class YoutubeDownloader(QMainWindow):
         if not is_supported_url(url):
             QMessageBox.warning(self, tr("invalid_link_title"), tr("invalid_link_message"))
             return
+        self.parsed_video_url = url
         self.stop_preview_cache()
         self.cancel_clip_selection()
+        self.info = None
+        self.thumbnail_bytes = b""
         self.batch_items = []
         self.save_all_covers_btn.hide()
         self.duplicate_indicator.hide()
-        self.range_combo.setEnabled(True)
+        self.range_combo.setEnabled(False)
+        self.format_combo.setEnabled(False)
         self.filename_edit.setEnabled(True)
         self.preview_cache_path = None
         self.parse_btn.setEnabled(False)
@@ -3750,7 +3797,10 @@ class YoutubeDownloader(QMainWindow):
             self.render_search_results()
 
     def info_ready(self, info, thumbnail):
+        if isinstance(self.sender(), InfoWorker) and self.sender() is not self.info_worker:
+            return
         self.info, self.thumbnail_bytes = info, thumbnail
+        self.range_combo.setEnabled(True)
         self.refresh_duplicate_indicator()
         self.start_library_scan()
         self.video_title.setText(info.get("title") or tr("untitled_video"))

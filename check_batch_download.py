@@ -229,6 +229,19 @@ with tempfile.TemporaryDirectory(dir=Path(__file__).parent / ".checkenv") as dir
         assert not window.clip_panel.isHidden(), "Single selected result cannot open clipping"
         window.cancel_clip_selection()
     print("SINGLE_SELECTION_OK: normal parsing, audio, clipping, formats, filename and cover restored")
+    with patch.object(ytdl.InfoWorker, "fetch", side_effect=fetch), patch.object(ytdl, "preview_cache_dir", return_value=Path(directory)), patch.object(ytdl.PreviewCacheWorker, "start"):
+        window.parse_search_result(entries[1]["webpage_url"])
+        assert window.info is None and not window.range_combo.isEnabled(), "Old metadata usable during a new parse"
+        deadline = time.monotonic() + 5
+        while window.info_worker is not None and time.monotonic() < deadline:
+            QTest.qWait(10)
+        assert window.info["id"] == entries[1]["id"]
+        assert window.preview_cache_worker.url == entries[1]["webpage_url"]
+        window.url_edit.setText(entries[2]["webpage_url"])
+        window.start_preview_cache()
+        assert window.preview_cache_worker.url == entries[1]["webpage_url"], "Edited URL redirected parsed video cache"
+        window.stop_preview_cache()
+    print("DIRECT_RESULT_OK: old metadata disabled; cache stays bound to parsed result")
     for manager, _ in window.tasks:
         manager.state = "finished"
     window.close()
