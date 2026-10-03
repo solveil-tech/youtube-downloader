@@ -17,3 +17,5 @@ dist/
 *.spec.bak
 .media-library-cache.json
 .download-source-index.json
+.backups/
+.release-check/

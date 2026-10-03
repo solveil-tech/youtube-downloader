@@ -4,6 +4,7 @@ cd /d "%~dp0"
 title Youtube Downloader - Source Check
 
 set "CHECK_PYTHON=%~dp0.checkenv\Scripts\python.exe"
+if exist "%~dp0.buildenv\Scripts\python.exe" set "CHECK_PYTHON=%~dp0.buildenv\Scripts\python.exe"
 set "BOOTSTRAP_PYTHON="
 
 if not exist "%CHECK_PYTHON%" (
@@ -28,7 +29,9 @@ if errorlevel 1 (
 )
 
 echo [2/3] Checking ytdl.py syntax and imports...
-"%CHECK_PYTHON%" -m py_compile "ytdl.py" "idol_search.py" "media_library.py" "youtube_search.py"
+set "YTDL_SAVED_DATA_DIR=%YTDL_DATA_DIR%"
+set "YTDL_DATA_DIR=%~dp0.checkenv\runtime-data"
+"%CHECK_PYTHON%" -m py_compile "ytdl.py" "idol_search.py" "media_library.py" "youtube_search.py" "song_catalogue.py" "download_check.py" "result_player.py"
 if errorlevel 1 (
     echo.
     echo [FAILED] Syntax check failed.
@@ -48,6 +51,18 @@ if not exist "idol_names\idol_aliases.json" (
     pause
     exit /b 1
 )
+"%CHECK_PYTHON%" -X utf8 "check_runtime_data.py"
+if errorlevel 1 (
+    echo [FAILED] Runtime data checks failed.
+    pause
+    exit /b 1
+)
+"%CHECK_PYTHON%" -X utf8 "check_search_sort.py"
+if errorlevel 1 (
+    echo [FAILED] Sorting and selection checks failed.
+    pause
+    exit /b 1
+)
 "%CHECK_PYTHON%" -X utf8 "check_idol_search.py"
 if errorlevel 1 (
     echo [FAILED] Idol search checks failed.
@@ -57,6 +72,18 @@ if errorlevel 1 (
 "%CHECK_PYTHON%" -X utf8 "check_media_library.py"
 if errorlevel 1 (
     echo [FAILED] Media library checks failed.
+    pause
+    exit /b 1
+)
+"%CHECK_PYTHON%" -X utf8 "check_search_extensions.py"
+if errorlevel 1 (
+    echo [FAILED] Song and search checks failed.
+    pause
+    exit /b 1
+)
+"%CHECK_PYTHON%" -X utf8 "check_keyword_search.py"
+if errorlevel 1 (
+    echo [FAILED] Keyword search checks failed.
     pause
     exit /b 1
 )
@@ -76,6 +103,7 @@ if errorlevel 1 (
 )
 echo Enter a group or member and a YYMMDD date, then click Search.
 echo Close the application window to finish this check.
+set "YTDL_DATA_DIR=%YTDL_SAVED_DATA_DIR%"
 "%CHECK_PYTHON%" "ytdl.py"
 set "APP_EXIT=%ERRORLEVEL%"
 if not "%APP_EXIT%"=="0" (

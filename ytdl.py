@@ -11,9 +11,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock, Event
 from pathlib import Path
 from datetime import datetime, timezone
-from idol_search import IdolCatalogue, make_search_plan, member_display_name, normalize as normalize_idol, rank_results, search_url, flatten_search_entries
+from idol_search import IdolCatalogue, make_search_plan, make_keyword_search_plan, member_display_name, normalize as normalize_idol, rank_results, search_url, flatten_search_entries
 from media_library import LibraryScanner, duplicate_matches, remember_download
-from youtube_search import search_short_pages, complete_short_metadata
+from youtube_search import search_short_pages, complete_short_metadata, YouTubeRateLimit, rate_limit_check
+from song_catalogue import SongCatalogue, fetch_group_songs
+from download_check import inspect_download
+from result_player import SearchVideoPlayer
 
 import requests
 
@@ -28,8 +31,8 @@ if getattr(sys, "frozen", False) and os.name == "nt":
         if hasattr(os, "add_dll_directory"):
             _QT_DLL_DIRECTORY_HANDLE = os.add_dll_directory(str(_qt_dll_dir))
 
-from PyQt6.QtCore import QEvent, QPoint, QProcess, QRectF, QSettings, QSize, Qt, QThread, QTimer, QUrl, QStringListModel, pyqtSignal, QObject, QVariantAnimation, QEasingCurve
-from PyQt6.QtGui import QAction, QColor, QCursor, QDesktopServices, QFont, QIcon, QImage, QPainter, QPen, QPixmap
+from PyQt6.QtCore import QEvent, QPoint, QPointF, QProcess, QRectF, QSettings, QSize, Qt, QThread, QTimer, QUrl, QStringListModel, pyqtSignal, QObject, QVariantAnimation, QEasingCurve
+from PyQt6.QtGui import QAction, QActionGroup, QColor, QCursor, QDesktopServices, QFont, QIcon, QImage, QPainter, QPen, QPixmap
 from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PyQt6.QtMultimediaWidgets import QVideoWidget
 from PyQt6.QtNetwork import QNetworkAccessManager, QNetworkRequest
@@ -37,7 +40,7 @@ from PyQt6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QCompleter, QFileDialog, QFrame, QHBoxLayout, QInputDialog,
     QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton,
     QScrollArea, QScrollBar, QSizePolicy, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QAbstractItemView,
-    QVBoxLayout, QWidget,
+    QVBoxLayout, QWidget, QToolButton, QDialog, QSlider, QWidgetAction,
 )
 
 try:
@@ -67,6 +70,33 @@ LANGUAGE_NAMES = {
 CURRENT_LANGUAGE = "zh"
 
 SEARCH_TEXTS = {
+    "checking": ("检查下载结果…", "Checking download…", "ダウンロードを確認中…", "다운로드 검사 중…", "Vérification…", "Download wird geprüft…", "Проверка загрузки…", "Controllo download…", "Comprobando descarga…", "فحص التنزيل…"),
+    "check_ok": ("下载完成 · 检查通过", "Completed · checks passed", "完了 · 確認済み", "완료 · 검사 통과", "Terminé · vérifié", "Fertig · Prüfung bestanden", "Готово · проверка пройдена", "Completato · controlli superati", "Completado · comprobado", "اكتمل · اجتاز الفحص"),
+    "check_warning": ("下载完成 · 检查提示", "Completed · inspection warning", "完了 · 確認警告", "완료 · 검사 경고", "Terminé · avertissement", "Fertig · Prüfhinweis", "Готово · предупреждение", "Completato · avviso", "Completado · advertencia", "اكتمل · تنبيه الفحص"),
+    "missing_file": ("最终文件不存在或为空", "Final file missing or empty", "ファイルがないか空です", "최종 파일 없음 또는 비어 있음", "Fichier absent ou vide", "Datei fehlt oder ist leer", "Файл отсутствует или пуст", "File mancante o vuoto", "Archivo ausente o vacío", "الملف مفقود أو فارغ"),
+    "missing_video": ("缺少视频流", "Video stream missing", "映像がありません", "영상 스트림 없음", "Flux vidéo absent", "Videospur fehlt", "Нет видеопотока", "Video mancante", "Falta vídeo", "مسار الفيديو مفقود"),
+    "missing_audio": ("缺少音轨", "Audio stream missing", "音声がありません", "오디오 스트림 없음", "Piste audio absente", "Audiospur fehlt", "Нет аудиопотока", "Audio mancante", "Falta audio", "مسار الصوت مفقود"),
+    "unknown_duration": ("无法确认文件时长", "Duration unavailable", "長さを確認できません", "재생 시간 확인 불가", "Durée inconnue", "Dauer unbekannt", "Длительность неизвестна", "Durata sconosciuta", "Duración desconocida", "المدة غير معروفة"),
+    "duration_mismatch": ("文件时长与预期不符（实际 / 预期）", "Duration mismatch (actual / expected)", "長さが異なります（実際 / 予定）", "시간 불일치 (실제 / 예상)", "Durée différente (réelle / attendue)", "Dauer abweichend (Ist / Soll)", "Длительность отличается (факт / ожидание)", "Durata diversa (reale / prevista)", "Duración distinta (real / prevista)", "اختلاف المدة (الفعلية / المتوقعة)"),
+    "av_mismatch": ("音视频时长明显不一致", "Audio/video duration mismatch", "音声と映像の長さが異なります", "음성/영상 길이 불일치", "Durées audio/vidéo différentes", "Audio-/Videodauer abweichend", "Длительности аудио/видео различаются", "Durate audio/video diverse", "Duraciones de audio/vídeo distintas", "اختلاف مدة الصوت والفيديو"),
+    "audio_gap": ("疑似音频数据间断", "Possible audio packet gap", "音声データに欠落の可能性", "오디오 데이터 공백 의심", "Interruption audio possible", "Mögliche Audiodatenlücke", "Возможный разрыв аудио", "Possibile interruzione audio", "Posible interrupción de audio", "انقطاع محتمل في بيانات الصوت"),
+    "audio_coverage": ("音频数据未覆盖视频首尾", "Audio does not cover video endpoints", "音声が映像の全区間を覆っていません", "오디오가 영상 시작/끝을 포함하지 않음", "Audio incomplet aux extrémités", "Audio deckt Anfang/Ende nicht ab", "Аудио не покрывает начало/конец", "Audio incompleto all'inizio/fine", "Audio incompleto al inicio/final", "الصوت لا يغطي بداية ونهاية الفيديو"),
+    "audio_packets_unknown": ("无法确认音频数据连续性", "Audio continuity unverified", "音声の連続性を確認できません", "오디오 연속성 확인 불가", "Continuité audio non vérifiée", "Audiokontinuität ungeprüft", "Непрерывность аудио не проверена", "Continuità audio non verificata", "Continuidad de audio no verificada", "استمرارية الصوت غير مؤكدة"),
+    "decode_error": ("抽样解码发现异常", "Sample decode error", "サンプル再生に問題があります", "샘플 디코딩 오류", "Erreur de décodage partiel", "Fehler bei Stichprobendekodierung", "Ошибка выборочного декодирования", "Errore di decodifica del campione", "Error de decodificación de muestra", "خطأ في فك ترميز العينة"),
+    "inspection_unavailable": ("检查未完成，文件已保留", "Inspection incomplete; file retained", "確認未完了。ファイルは保持されます", "검사 미완료, 파일 보존됨", "Vérification incomplète, fichier conservé", "Prüfung unvollständig, Datei erhalten", "Проверка не завершена, файл сохранён", "Controllo incompleto, file conservato", "Comprobación incompleta, archivo conservado", "الفحص غير مكتمل؛ تم الاحتفاظ بالملف"),
+    "song": ("曲目（可选）", "Song (optional)", "曲名（任意）", "곡 (선택)", "Chanson (facultatif)", "Titel (optional)", "Песня (необязательно)", "Brano (facoltativo)", "Canción (opcional)", "الأغنية (اختياري)"),
+    "deep": ("深度检索", "Deep search", "詳細検索", "심층 검색", "Recherche approfondie", "Tiefensuche", "Глубокий поиск", "Ricerca approfondita", "Búsqueda profunda", "بحث موسع"),
+    "keyword_filters": ("必要关键词筛选", "Required keywords", "必須キーワード", "필수 키워드", "Mots-clés obligatoires", "Erforderliche Suchbegriffe", "Обязательные слова", "Parole obbligatorie", "Palabras obligatorias", "الكلمات المطلوبة"),
+    "search_information_required": ("请补充检索信息：至少填写组合＋曲目、组合＋日期、曲目＋爱豆、曲目＋日期或爱豆＋日期。", "Add group + song, group + date, song + member, song + date, or member + date.", "検索情報を追加してください。", "검색 정보를 추가하세요.", "Ajoutez des informations de recherche.", "Bitte Suchinformationen ergänzen.", "Дополните параметры поиска.", "Aggiungi informazioni di ricerca.", "Añade información de búsqueda.", "أضف معلومات البحث."),
+    "date_tolerance": ("日期容错：补充后两周发布的视频", "Date tolerance: next 14 days of uploads", "日付許容：以後14日間の投稿", "날짜 허용: 이후 14일 게시 영상", "Tolérance : publications des 14 jours suivants", "Datumstoleranz: Uploads der nächsten 14 Tage", "Допуск даты: публикации следующих 14 дней", "Tolleranza: pubblicazioni nei 14 giorni successivi", "Tolerancia: publicaciones de los 14 días siguientes", "تسامح التاريخ: منشورات الأسبوعين التاليين"),
+    "deep_result": ("深度结果 · 舞台日期未确认", "Deep result · performance date unconfirmed", "詳細結果 · 公演日未確認", "심층 결과 · 공연일 미확인", "Résultat approfondi · date non confirmée", "Tiefensuche · Auftrittsdatum unbestätigt", "Глубокий результат · дата не подтверждена", "Risultato approfondito · data non confermata", "Resultado profundo · fecha no confirmada", "نتيجة موسعة · تاريخ الأداء غير مؤكد"),
+    "deep_both": ("组合名 + 爱豆名", "Group + member", "グループ＋メンバー", "그룹 + 멤버", "Groupe + membre", "Gruppe + Mitglied", "Группа + участница", "Gruppo + membro", "Grupo + integrante", "المجموعة + العضوة"),
+    "deep_member": ("只要求爱豆名", "Member required", "メンバーのみ必須", "멤버명만 필수", "Membre requis", "Mitglied erforderlich", "Только участница", "Solo membro richiesto", "Solo integrante obligatorio", "اسم العضوة مطلوب"),
+    "deep_group": ("只要求组合名", "Group required", "グループのみ必須", "그룹명만 필수", "Groupe requis", "Gruppe erforderlich", "Только группа", "Solo gruppo richiesto", "Solo grupo obligatorio", "اسم المجموعة مطلوب"),
+    "deep_member_error": ("此深度模式需要先确认成员；仅搜索组合请选择“只要求组合名”。", "Choose a member, or use Group required mode.", "メンバーを選ぶかグループのみを選択してください。", "멤버를 선택하거나 그룹명만 필수로 설정하세요.", "Choisissez un membre ou le mode groupe.", "Mitglied wählen oder Gruppenmodus verwenden.", "Выберите участницу или режим группы.", "Scegli un membro o la modalità gruppo.", "Elige integrante o modo de grupo.", "اختر عضوة أو وضع المجموعة."),
+    "songs_local_missing": ("本地曲目库暂未收录此组合，可手动输入曲目。", "This group is not yet in the local song catalogue; type a song manually.", "ローカル曲目未収録。手入力できます。", "로컬 곡 목록 미등록. 직접 입력하세요.", "Groupe absent du catalogue local ; saisie manuelle possible.", "Keine lokalen Titel; manuelle Eingabe möglich.", "Группа отсутствует в локальном каталоге; введите песню вручную.", "Gruppo assente dal catalogo locale; inserisci un brano.", "Grupo no incluido en el catálogo local; escribe una canción.", "المجموعة غير مدرجة محلياً؛ أدخل الأغنية يدوياً."),
+    "songs_reload_local": ("重新读取本地曲目库", "Reload local song catalogue", "ローカル曲目を再読込", "로컬 곡 목록 다시 읽기", "Relire le catalogue local", "Lokalen Katalog neu laden", "Перечитать локальный каталог", "Ricarica catalogo locale", "Recargar catálogo local", "إعادة تحميل القائمة المحلية"),
+    "songs_missing": ("曲目目录暂不可用或身份不唯一，可手动输入；点击曲目栏刷新图标重试。", "Catalogue unavailable or artist ambiguous; type manually or retry with refresh.", "曲目を取得できません。手入力または更新してください。", "곡 목록을 가져올 수 없습니다. 직접 입력하거나 새로고침하세요.", "Catalogue indisponible : saisissez ou réessayez.", "Katalog nicht verfügbar: manuell eingeben oder erneut laden.", "Каталог недоступен: введите вручную или обновите.", "Catalogo non disponibile: inserisci o aggiorna.", "Catálogo no disponible: escribe o actualiza.", "القائمة غير متاحة؛ أدخل يدوياً أو أعد التحميل."),
     "batch_parse": ("解析所选（{count}）", "Parse selected ({count})", "選択を解析（{count}）", "선택 분석 ({count})", "Analyser ({count})", "Auswahl analysieren ({count})", "Разобрать ({count})", "Analizza ({count})", "Analizar ({count})", "تحليل المحدد ({count})"),
     "select_all": ("全选", "Select all", "すべて選択", "전체 선택", "Tout sélectionner", "Alle auswählen", "Выбрать все", "Seleziona tutto", "Seleccionar todo", "تحديد الكل"),
     "save_all_covers": ("保存全部封面", "Save all covers", "すべてのカバーを保存", "모든 표지 저장", "Enregistrer les couvertures", "Alle Cover speichern", "Сохранить все обложки", "Salva tutte le copertine", "Guardar todas las portadas", "حفظ كل الأغلفة"),
@@ -89,13 +119,49 @@ SEARCH_TEXTS = {
     "search_summary": ("{count} 条结果 · {failed} 项查询失败 · 发布时间带 ≈ 为估计值", "{count} results · {failed} failed queries · ≈ means estimated upload date", "{count} 件 · 失敗 {failed} · ≈ は推定公開日", "{count}개 · 실패 {failed} · ≈는 추정 게시일", "{count} résultats · {failed} échecs · ≈ date estimée", "{count} Ergebnisse · {failed} Fehler · ≈ geschätztes Upload-Datum", "{count} результатов · ошибок {failed} · ≈ примерная дата публикации", "{count} risultati · {failed} errori · ≈ data stimata", "{count} resultados · {failed} fallos · ≈ fecha estimada", "{count} نتيجة · {failed} استعلامات فاشلة · ≈ تاريخ نشر تقديري"),
     "search_download": ("下载", "Download", "ダウンロード", "다운로드", "Télécharger", "Herunterladen", "Скачать", "Scarica", "Descargar", "تنزيل"),
     "related_result": ("近似匹配", "Related match", "関連結果", "유사 결과", "Résultat proche", "Ähnlicher Treffer", "Похожий результат", "Risultato simile", "Coincidencia aproximada", "نتيجة مشابهة"),
+    "sort_match": ("匹配优先", "Best match", "一致度順", "일치도순", "Pertinence", "Relevanz", "По соответствию", "Pertinenza", "Relevancia", "الأكثر تطابقًا"),
+    "kpop_search": ("K-pop 视频检索", "K-pop video search", "K-pop動画検索", "K-pop 영상 검색", "Recherche vidéo K-pop", "K-pop-Videosuche", "Поиск видео K-pop", "Ricerca video K-pop", "Buscar vídeos K-pop", "البحث عن فيديو K-pop"),
+    "sort_newest": ("发布时间：新到旧", "Newest first", "公開日：新しい順", "게시일: 최신순", "Plus récents", "Neueste zuerst", "Сначала новые", "Più recenti", "Más recientes", "الأحدث أولًا"),
+    "sort_oldest": ("发布时间：旧到新", "Oldest first", "公開日：古い順", "게시일: 오래된순", "Plus anciens", "Älteste zuerst", "Сначала старые", "Meno recenti", "Más antiguos", "الأقدم أولًا"),
+    "sort_longest": ("时长：长到短", "Longest first", "長さ：長い順", "길이: 긴순", "Plus longs", "Längste zuerst", "Сначала длинные", "Più lunghi", "Más largos", "الأطول أولًا"),
+    "sort_shortest": ("时长：短到长", "Shortest first", "長さ：短い順", "길이: 짧은순", "Plus courts", "Kürzeste zuerst", "Сначала короткие", "Più brevi", "Más cortos", "الأقصر أولًا"),
 }
 
 
 def search_tr(key, **values):
     options = SEARCH_TEXTS[key]
     value = options[LANGUAGE_CODES.index(CURRENT_LANGUAGE)].format(**values)
+    if key in ('group', 'member', 'song', 'date'):
+        value = re.split(r'\s*[（(]', value, maxsplit=1)[0]
     return value.rsplit(" · ", 1)[0] if key == "search_summary" else value
+
+
+def sorted_search_entries(entries, mode='match'):
+    """Sort within fixed match tiers; only exact matches prioritize non-Shorts."""
+    def key(entry):
+        score = tuple(entry.get('_score') or ())
+        exact = bool(score and score[0])
+        short = bool(entry.get('_is_short') or '/shorts/' in str(entry.get('webpage_url') or entry.get('url') or ''))
+        tier = (not exact, short if exact else False)
+        if mode in ('newest', 'oldest'):
+            published = None
+            try:
+                if entry.get('timestamp') is not None:
+                    published = float(entry['timestamp'])
+                else:
+                    date = str(entry.get('upload_date') or entry.get('publish_date') or '')
+                    published = datetime.strptime(date, '%Y%m%d').replace(tzinfo=timezone.utc).timestamp()
+            except (ValueError, TypeError, OSError, OverflowError):
+                pass
+            return tier + (published is None, (-published if mode == 'newest' else published) if published is not None else 0)
+        if mode in ('longest', 'shortest'):
+            try:
+                duration = float(entry['duration']) if entry.get('duration') is not None else None
+            except (ValueError, TypeError):
+                duration = None
+            return tier + (duration is None, (-duration if mode == 'longest' else duration) if duration is not None else 0)
+        return tier + tuple(-int(part) for part in score)
+    return sorted(entries, key=key)
 
 # Chinese, English, Japanese, Korean, French, German, Russian, Italian, Spanish, Arabic
 TEXTS = {
@@ -243,14 +309,38 @@ def bundled_path(name):
     return bundled if bundled.exists() else runtime_dir() / name
 
 
+def app_data_dir():
+    override = os.environ.get('YTDL_DATA_DIR')
+    base = Path(override) if override else Path(os.environ.get('LOCALAPPDATA') or tempfile.gettempdir()) / ORG_NAME / APP_NAME.replace(' ', '')
+    base.mkdir(parents=True, exist_ok=True)
+    return base
+
+
+def app_data_file(name, migrate=False):
+    target = app_data_dir() / name
+    if migrate and not target.exists():
+        old = runtime_dir() / name
+        if old.is_file():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                # Leave legacy files untouched; this also supports desktop copies.
+                with old.open('rb') as source, target.open('xb') as destination:
+                    shutil.copyfileobj(source, destination)
+            except FileExistsError:
+                pass
+    return target
+
+
 def engine_path():
+    updated = app_data_dir() / 'yt_dlp.exe'
+    if updated.is_file():
+        return updated
     external = runtime_dir() / "yt_dlp.exe"
     return external if external.exists() else bundled_path("yt_dlp.exe")
 
 
 def preview_cache_dir():
-    base = Path(os.environ.get("LOCALAPPDATA") or tempfile.gettempdir())
-    return base / ORG_NAME / APP_NAME.replace(" ", "") / "preview-cache"
+    return app_data_dir() / 'preview-cache'
 
 
 def select_preview_format(info):
@@ -343,9 +433,26 @@ def preview_package(info):
     return result
 
 
+def playback_sources(info):
+    formats = [f for f in info.get("formats", []) if f.get("url") and is_direct_media_format(f)]
+    videos = [f for f in formats if f.get("vcodec") not in (None, "none", "images")]
+    if not videos:
+        raise ValueError(tr("info_parse_failed"))
+    video = max(videos, key=lambda f: (quality_height(f), float(f.get("fps") or 0),
+                                     f.get("ext") == "mp4", float(f.get("tbr") or 0)))
+    if video.get("acodec") not in (None, "none"):
+        return video, None
+    audios = [f for f in formats if f.get("vcodec") == "none" and f.get("acodec") not in (None, "none")]
+    if not audios:
+        raise ValueError(search_tr("missing_audio"))
+    return video, max(audios, key=lambda f: float(f.get("abr") or f.get("tbr") or 0))
+
+
 def cookie_path():
-    path = runtime_dir() / COOKIE_FILE
-    return path if path.exists() else None
+    for path in (app_data_dir() / COOKIE_FILE, runtime_dir() / COOKIE_FILE):
+        if path.is_file():
+            return path
+    return None
 
 
 def clean_filename(name):
@@ -574,11 +681,13 @@ class IdolSearchWorker(QThread):
     results = pyqtSignal(list)
     progress = pyqtSignal(int, int)
     failed = pyqtSignal(str)
+    diagnostics = pyqtSignal(list)
 
     def __init__(self, plan):
         super().__init__()
         self.plan = plan
         self.failed_queries = 0
+        self.error_details = []
         self.processes = set()
         self.process_lock = Lock()
 
@@ -595,6 +704,7 @@ class IdolSearchWorker(QThread):
     def query(self, query, shorts=False):
         if self.isInterruptionRequested():
             return []
+        rate_limit_check()
         if shorts:
             return search_short_pages(query, self.isInterruptionRequested)
         target = search_url(query, True) if shorts else "ytsearch60:" + query
@@ -642,12 +752,12 @@ class IdolSearchWorker(QThread):
         try:
             if not engine_path().is_file():
                 raise RuntimeError(tr("engine_missing"))
-            with ThreadPoolExecutor(max_workers=5) as pool, ThreadPoolExecutor(max_workers=4) as metadata_pool:
+            with ThreadPoolExecutor(max_workers=3) as pool, ThreadPoolExecutor(max_workers=2) as metadata_pool:
                 # Include the date in Shorts queries so recent clips are not
                 # crowded out by years of popular, unrelated-date Shorts.
-                requests = [(query, shorts) for query in self.plan["queries"] for shorts in (False, True)]
+                requests = [(query, shorts) for query in [*self.plan["queries"], *self.plan.get("deep_queries", [])] for shorts in (False, True)]
                 requests += [(query + " shorts", False) for query in self.plan.get("short_queries", [])]
-                jobs = [pool.submit(self.query, query, shorts) for query, shorts in requests]
+                jobs = {pool.submit(self.query, query, shorts): (query, shorts) for query, shorts in requests}
                 for done, future in enumerate(as_completed(jobs), 1):
                     if self.isInterruptionRequested():
                         for job in jobs:
@@ -659,8 +769,8 @@ class IdolSearchWorker(QThread):
                         # Only enrich locally name/date-matched Shorts, once per ID.
                         # Search cards omit these fields; querying media formats for
                         # every result would be unnecessarily slow.
-                        candidates = rank_results(entries, self.plan, require_context=False)[:300]
-                        missing = [entry for entry in candidates if entry.get("_is_short")
+                        candidates = rank_results(entries, self.plan, require_context=False, allow_unverified=True)
+                        missing = [entry for entry in candidates if (entry.get("_is_short") or entry.get("_deep_result"))
                                    and entry["id"] not in short_metadata]
                         metadata_jobs = {metadata_pool.submit(complete_short_metadata, entry,
                                                              self.isInterruptionRequested): entry for entry in missing}
@@ -670,11 +780,16 @@ class IdolSearchWorker(QThread):
                                 break
                             try:
                                 completed = metadata_job.result()
+                            except YouTubeRateLimit as exc:
+                                completed = entry
+                                if str(exc) not in errors:
+                                    errors.append(str(exc))
                             except Exception:
                                 try:
                                     completed = complete_short_metadata(entry, self.isInterruptionRequested)
-                                except Exception:
+                                except Exception as exc:
                                     completed = entry
+                                    errors.append(f"{entry.get('webpage_url') or entry['id']}: {exc}")
                             short_metadata[entry["id"]] = completed
                         visible = [short_metadata.get(entry["id"], entry) for entry in candidates]
                         # Do not present a nameless/duration-less Shorts card as a
@@ -683,14 +798,37 @@ class IdolSearchWorker(QThread):
                                    or entry.get("_metadata_complete")]
                         self.results.emit(rank_results(visible, self.plan)[:300])
                     except Exception as exc:
-                        errors.append(str(exc))
+                        query, shorts = jobs[future]
+                        errors.append(f"{query} [{'Shorts' if shorts else 'Video'}]: {exc}")
                     self.failed_queries = len(errors)
+                    self.error_details = list(dict.fromkeys(errors))
+                    self.diagnostics.emit(self.error_details)
                     self.progress.emit(done, len(jobs))
             if not self.isInterruptionRequested() and not success:
                 raise RuntimeError(errors[-1] if errors else "YouTube search failed")
         except Exception as exc:
             if not self.isInterruptionRequested():
+                self.error_details = list(dict.fromkeys([*self.error_details, str(exc)]))
+                self.diagnostics.emit(self.error_details)
                 self.failed.emit(str(exc))
+
+
+class SongCatalogueWorker(QThread):
+    ready = pyqtSignal(str, dict)
+    failed = pyqtSignal(str, str)
+
+    def __init__(self, group):
+        super().__init__()
+        self.group = group
+
+    def run(self):
+        try:
+            result = fetch_group_songs(self.group, self.isInterruptionRequested)
+            if not self.isInterruptionRequested():
+                self.ready.emit(self.group['name'], result)
+        except Exception as exc:
+            if not self.isInterruptionRequested():
+                self.failed.emit(self.group['name'], str(exc))
 
 
 class LibraryWorker(QThread):
@@ -883,9 +1021,9 @@ class EngineUpdateWorker(QThread):
         self.expected_version = expected_version
 
     def run(self):
-        target = runtime_dir() / "yt_dlp.exe"
-        backup = runtime_dir() / "yt_dlp.exe.backup"
-        temporary = runtime_dir() / "yt_dlp-update.exe"
+        target = app_data_dir() / "yt_dlp.exe"
+        backup = app_data_dir() / "yt_dlp.exe.backup"
+        temporary = app_data_dir() / "yt_dlp-update.exe"
         replaced = False
         try:
             response = requests.get(self.download_url, stream=True, timeout=60)
@@ -953,13 +1091,67 @@ class LoadingSpinner(QWidget):
         painter.drawArc(self.rect().adjusted(4, 4, -4, -4), self.angle * 16, 250 * 16)
 
 
+class KeywordCheckBox(QCheckBox):
+    def hitButton(self, position):
+        return self.rect().contains(position)
+
+    def paintEvent(self, event):
+        owner = self
+        while owner is not None and not hasattr(owner, 'dark_mode'):
+            owner = owner.parentWidget()
+        dark = bool(getattr(owner, 'dark_mode', False))
+        foreground = QColor('#f1f3f7' if dark else TEXT)
+        accent = QColor('#7987ff' if dark else ACCENT)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setOpacity(1.0 if self.isEnabled() else 0.5)
+        size = 13
+        box = QRectF(8, (self.height() - size) / 2, size, size)
+        painter.setPen(QPen(accent if self.isChecked() else QColor('#a5abb6' if dark else '#687080'), 1.2))
+        painter.setBrush(accent if self.isChecked() else QColor('#242832' if dark else '#ffffff'))
+        painter.drawRoundedRect(box, 2, 2)
+        if self.isChecked():
+            painter.setPen(QPen(QColor('#ffffff'), 1.8, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+            painter.drawLine(QPointF(box.left() + 3, box.top() + 6.5), QPointF(box.left() + 5.5, box.top() + 9))
+            painter.drawLine(QPointF(box.left() + 5.5, box.top() + 9), QPointF(box.left() + 10, box.top() + 4))
+        painter.setPen(foreground)
+        painter.drawText(self.rect().adjusted(28, 0, -8, 0), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, self.text())
+
+
+class PersistentOptionsMenu(QMenu):
+    def mouseReleaseEvent(self, event):
+        action = self.actionAt(event.position().toPoint())
+        if event.button() == Qt.MouseButton.LeftButton and action and action.isEnabled() and action.isCheckable():
+            action.trigger()
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
+
+    def keyPressEvent(self, event):
+        action = self.activeAction()
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space) and action and action.isCheckable():
+            action.trigger()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+
 class SearchResultCard(QWidget):
     clicked = pyqtSignal()
 
     def __init__(self):
         super().__init__()
+        self.setObjectName('searchResultCard')
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
         self.click_origin = None
         self.installEventFilter(self)
+
+    def set_selected(self, selected):
+        self.setProperty('chosen', bool(selected))
+        self.style().unpolish(self)
+        self.style().polish(self)
+        self.update()
 
     def eventFilter(self, watched, event):
         if event.type() == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.LeftButton:
@@ -1030,11 +1222,11 @@ class CoverLabel(QLabel):
             painter.drawRoundedRect(rect, 5, 5)
             pixmap = QPixmap()
             if pixmap.loadFromData(self.stack_entries[index].get("thumbnail", b"")):
-                scale = min((width - 4) / pixmap.width(), (height - 4) / pixmap.height())
-                target_width, target_height = pixmap.width() * scale, pixmap.height() * scale
-                target = QRectF(rect.center().x() - target_width / 2, rect.center().y() - target_height / 2,
-                                target_width, target_height)
-                painter.drawPixmap(target, pixmap, QRectF(pixmap.rect()))
+                scale = max((width - 4) / pixmap.width(), (height - 4) / pixmap.height())
+                source_width, source_height = (width - 4) / scale, (height - 4) / scale
+                source = QRectF((pixmap.width() - source_width) / 2, (pixmap.height() - source_height) / 2,
+                                source_width, source_height)
+                painter.drawPixmap(rect.adjusted(2, 2, -2, -2), pixmap, source)
             self.layer_rects.append((index, rect))
         if visible:
             rect = self.layer_rects[-1][1]
@@ -1492,7 +1684,8 @@ class ChevronComboBox(QComboBox):
             return
         if self.popup_frame is not None and self.popup_frame.isVisible():
             return
-        host = self.window().centralWidget()
+        top = self.window()
+        host = top.centralWidget() if hasattr(top, 'centralWidget') else top
         if host is None:
             return
         popup_parent = self.window() if self.overlay_popup else host
@@ -1616,6 +1809,31 @@ class ChevronComboBox(QComboBox):
         super().paintEvent(event)
 
 
+class DownloadCheckWorker(QThread):
+    ready = pyqtSignal(list)
+
+    def __init__(self, output, expected, video_required, audio_required, clip):
+        super().__init__()
+        self.output, self.expected = output, expected
+        self.video_required, self.audio_required, self.clip = video_required, audio_required, clip
+
+    def run(self):
+        probe = bundled_path("ffprobe.exe")
+        ffmpeg = bundled_path("ffmpeg.exe")
+        probe = str(probe) if probe.is_file() else shutil.which("ffprobe")
+        ffmpeg = str(ffmpeg) if ffmpeg.is_file() else shutil.which("ffmpeg")
+        try:
+            result = inspect_download(self.output, probe or "ffprobe", ffmpeg, self.expected,
+                                      self.video_required, self.audio_required, self.clip,
+                                      self.isInterruptionRequested)
+        except InterruptedError:
+            return
+        except Exception as exc:
+            result = [("inspection_unavailable", str(exc))]
+        if not self.isInterruptionRequested():
+            self.ready.emit(result)
+
+
 class DownloadManager(QWidget):
     progress_changed = pyqtSignal(float, str, str, str)
     state_changed = pyqtSignal(str, str)
@@ -1636,6 +1854,11 @@ class DownloadManager(QWidget):
         self.url, self.selector, self.output_path = url, selector, str(output)
         self.merge_ext, self.download_cover, self.section = merge_ext, cover, section
         self.overwrite = overwrite
+        self.expected_duration = 0
+        self.video_required = True
+        self.audio_required = True
+        self.check_worker = None
+        self.check_issues = None
         self.state, self.process, self.output_log, self.stop_reason = "waiting", None, "", None
         self.auto_retry_count = 0
         self._attempt_resolved = False
@@ -1862,11 +2085,37 @@ class DownloadManager(QWidget):
             return
         if exit_code == 0:
             self.auto_retry_count = 0
-            self.state = "finished"
-            self.state_changed.emit("finished", tr("finished"))
-            self.finished.emit(True)
+            self.state = "checking"
+            self.state_changed.emit("checking", search_tr("checking"))
+            expected = self.section[1] - self.section[0] if self.section else self.expected_duration
+            self.check_worker = DownloadCheckWorker(self.output_path, expected, self.video_required,
+                                                    self.audio_required, bool(self.section))
+            self.check_worker.ready.connect(self.download_checked)
+            self.check_worker.finished.connect(self.download_check_finished)
+            self.check_worker.start()
             return
         self.handle_attempt_failure(self.last_error())
+
+    def completion_detail(self):
+        if self.check_issues is None:
+            return tr("finished")
+        if not self.check_issues:
+            return search_tr("check_ok")
+        return search_tr("check_warning") + " · " + "; ".join(
+            search_tr(code) + (": " + detail if detail else "") for code, detail in self.check_issues)
+
+    def download_checked(self, issues):
+        if self.state != "checking":
+            return
+        self.check_issues = issues
+        self.state = "finished"
+        self.state_changed.emit("finished", self.completion_detail())
+        self.finished.emit(True)
+
+    def download_check_finished(self):
+        worker, self.check_worker = self.check_worker, None
+        if worker is not None:
+            worker.deleteLater()
 
     def process_error(self, _error):
         if self.stop_reason or self._attempt_resolved:
@@ -1955,6 +2204,8 @@ class DownloadManager(QWidget):
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
 
     def clear_files(self):
+        if self.check_worker is not None:
+            self.check_worker.requestInterruption()
         self.retry_timer.stop()
         if self.process and self.process.state() != QProcess.ProcessState.NotRunning:
             self.stop_reason = "clear"
@@ -1983,6 +2234,8 @@ class DownloadManager(QWidget):
         self.state = "cleared"
 
     def hide_and_discard_cache(self):
+        if self.check_worker is not None:
+            self.check_worker.requestInterruption()
         self.retry_timer.stop()
         if self.process and self.process.state() != QProcess.ProcessState.NotRunning:
             self.stop_reason = "clear"
@@ -2000,7 +2253,7 @@ class DownloadManager(QWidget):
                 if resolved in self.preexisting_files:
                     continue
                 if item == output:
-                    if self.state == "finished":
+                    if self.state in ("finished", "checking"):
                         continue
                     try:
                         item.unlink(missing_ok=True)
@@ -2055,6 +2308,8 @@ class DownloadTaskWidget(QFrame):
         self.open_video_btn = QPushButton()
         self.copy_link_btn.setObjectName("taskIcon")
         self.open_video_btn.setObjectName("taskIcon")
+        self.copy_link_btn.setProperty('themeIcon', 'fa5s.copy')
+        self.open_video_btn.setProperty('themeIcon', 'fa5s.external-link-alt')
         self.copy_link_btn.setToolTip(tr("copy_link"))
         self.open_video_btn.setToolTip(tr("open_video"))
         if qta is not None:
@@ -2087,9 +2342,11 @@ class DownloadTaskWidget(QFrame):
         self.pause_btn = QPushButton(tr("pause"))
         self.retry_btn = QPushButton(tr("retry"))
         self.open_btn = QPushButton(tr("open_folder"))
+        self.play_file_btn = QPushButton(tr("play"))
+        self.play_file_btn.setEnabled(manager.state == "finished" and Path(manager.output_path).is_file())
         self.clear_btn = QPushButton(tr("clear"))
         self.hide_btn = QPushButton(tr("hide_task"))
-        for button in (self.pause_btn, self.retry_btn, self.open_btn, self.clear_btn, self.hide_btn):
+        for button in (self.pause_btn, self.retry_btn, self.open_btn, self.play_file_btn, self.clear_btn, self.hide_btn):
             button.setObjectName("taskSmall")
             button.setFixedHeight(25)
         self.retry_btn.hide()
@@ -2097,11 +2354,13 @@ class DownloadTaskWidget(QFrame):
         self.pause_btn.clicked.connect(self.pause_or_resume)
         self.retry_btn.clicked.connect(manager.retry)
         self.open_btn.clicked.connect(manager.open_folder)
+        self.play_file_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(Path(manager.output_path).resolve()))))
         self.clear_btn.clicked.connect(self.request_clear)
         self.hide_btn.clicked.connect(self.request_hide)
         buttons.addWidget(self.pause_btn)
         buttons.addWidget(self.retry_btn)
         buttons.addWidget(self.open_btn)
+        buttons.addWidget(self.play_file_btn)
         buttons.addWidget(self.clear_btn)
         buttons.addStretch()
         buttons.addWidget(self.hide_btn)
@@ -2147,7 +2406,7 @@ class DownloadTaskWidget(QFrame):
         self.open_video_btn.setFixedSize(icon_size, icon_size)
         self.copy_link_btn.setIconSize(QSize(max(11, round(13 * scale)), max(11, round(13 * scale))))
         self.open_video_btn.setIconSize(QSize(max(11, round(13 * scale)), max(11, round(13 * scale))))
-        for button in (self.pause_btn, self.retry_btn, self.open_btn, self.clear_btn, self.hide_btn):
+        for button in (self.pause_btn, self.retry_btn, self.open_btn, self.play_file_btn, self.clear_btn, self.hide_btn):
             button.setFixedHeight(max(20, round(25 * scale)))
         self.copy_error_btn.setFixedHeight(max(20, round(25 * scale)))
 
@@ -2161,15 +2420,18 @@ class DownloadTaskWidget(QFrame):
 
     def update_state(self, state, detail):
         self.last_state = state
+        self.play_file_btn.setEnabled(state == "finished" and Path(self.manager.output_path).is_file())
         self.detail_label.setText(detail or state)
         self.detail_label.setToolTip(detail or state)
         self.pause_btn.setText(tr("resume") if state == "paused" else tr("pause"))
         self.pause_btn.setEnabled(state in ("running", "paused"))
         self.retry_btn.setVisible(state == "failed")
+        warning = state == "finished" and bool(self.manager.check_issues)
+        self.clear_btn.setEnabled(state != "checking")
         self.detail_label.setCursor(
-            Qt.CursorShape.PointingHandCursor if state == "failed" else Qt.CursorShape.ArrowCursor
+            Qt.CursorShape.PointingHandCursor if state == "failed" or warning else Qt.CursorShape.ArrowCursor
         )
-        if state == "failed":
+        if state == "failed" or warning:
             self.error_detail = detail or state
             self.detail_label.setToolTip(f"{tr('error_details')}\n{self.error_detail}")
         else:
@@ -2178,6 +2440,7 @@ class DownloadTaskWidget(QFrame):
             self.error_panel.hide()
             self.update_card_height()
         self.setProperty("failed", state == "failed")
+        self.setProperty("checkWarning", warning)
         self.style().unpolish(self)
         self.style().polish(self)
         self.update()
@@ -2202,7 +2465,7 @@ class DownloadTaskWidget(QFrame):
         self.setMaximumHeight(max(86, round(height * scale)))
 
     def toggle_error_details(self):
-        if self.manager.state != "failed" or not self.error_detail:
+        if (self.manager.state != "failed" and not self.manager.check_issues) or not self.error_detail:
             return
         self.error_expanded = not self.error_expanded
         self.error_text.setText(self.error_detail)
@@ -2217,6 +2480,7 @@ class DownloadTaskWidget(QFrame):
         self.pause_btn.setText(tr("resume") if self.manager.state == "paused" else tr("pause"))
         self.retry_btn.setText(tr("retry"))
         self.open_btn.setText(tr("open_folder"))
+        self.play_file_btn.setText(tr("play"))
         self.clear_btn.setText(tr("clear"))
         self.hide_btn.setText(tr("hide_task"))
         self.copy_link_btn.setToolTip(tr("copy_link"))
@@ -2225,7 +2489,9 @@ class DownloadTaskWidget(QFrame):
         if self.manager.state == "waiting":
             self.detail_label.setText(tr("waiting"))
         elif self.manager.state == "finished":
-            self.detail_label.setText(tr("finished"))
+            self.update_state("finished", self.manager.completion_detail())
+        elif self.manager.state == "checking":
+            self.update_state("checking", search_tr("checking"))
 
     def request_clear(self):
         answer = QMessageBox.question(self, tr("clear_task_title"), tr("clear_task_message"),
@@ -2269,6 +2535,8 @@ class YoutubeDownloader(QMainWindow):
         self.search_entries = []
         self.search_progress_value = (0, 0)
         self.search_failed_count = 0
+        self.search_error_details = []
+        self.result_player = None
         self.selected_idol_id = None
         self.idol_input_alias = ""
         self._suppress_results_reopen = False
@@ -2337,21 +2605,60 @@ class YoutubeDownloader(QMainWindow):
 
     def build_search_ui(self, page):
         self.group_user_selected = False
+        self.song_catalogue = SongCatalogue(app_data_dir() / "idol_names" / "song_catalogue.json",
+                                             bundled_path("idol_names/song_catalogue.json"))
+        self.song_workers = {}
+        self.song_attempted_groups = set()
+        self.song_list_requested = False
+        self.search_disclosure = QFrame()
+        self.search_disclosure.setObjectName('card')
+        disclosure_row = QHBoxLayout(self.search_disclosure)
+        disclosure_row.setContentsMargins(8, 0, 8, 0)
+        disclosure_row.setSpacing(0)
+        self.search_disclosure_btn = QPushButton(search_tr('kpop_search'))
+        self.search_disclosure_btn.setObjectName('searchDisclosure')
+        self.search_disclosure_btn.clicked.connect(self.toggle_kpop_search)
+        self.search_disclosure_arrow = ChevronButton()
+        self.search_disclosure_arrow.setFixedSize(28, 26)
+        self.search_disclosure_arrow.pressed.connect(self.toggle_kpop_search)
+        disclosure_row.addWidget(self.search_disclosure_btn, 1)
+        disclosure_row.addWidget(self.search_disclosure_arrow)
+        page.addWidget(self.search_disclosure)
         self.search_card = QFrame()
         self.search_card.setObjectName("card")
         row = QHBoxLayout(self.search_card)
         row.setContentsMargins(12, 8, 12, 8)
         row.setSpacing(8)
         self.group_edit, self.idol_edit, self.search_date_edit = QLineEdit(), QLineEdit(), QLineEdit()
-        for edit in (self.group_edit, self.idol_edit, self.search_date_edit):
+        self.song_edit = QLineEdit()
+        for edit in (self.group_edit, self.song_edit, self.idol_edit, self.search_date_edit):
             edit.setMinimumWidth(0)
             edit.setClearButtonEnabled(True)
         self.search_date_edit.setMaxLength(6)
         self.search_spinner = LoadingSpinner()
         row.addWidget(self.group_edit, 2)
+        row.addWidget(self.song_edit, 2)
         row.addWidget(self.idol_edit, 2)
         row.addWidget(self.search_date_edit, 2)
         row.addWidget(self.search_spinner)
+        self.deep_btn = QPushButton()
+        self.deep_btn.setObjectName("headerIcon")
+        self.deep_btn.setIcon(self._button_icon("fa5s.sliders-h"))
+        self.deep_menu = PersistentOptionsMenu(self)
+        self.keyword_actions = {}
+        self.keyword_filter_signature = None
+        for mode in ("group", "song", "member", "date"):
+            action = QWidgetAction(self.deep_menu)
+            checkbox = KeywordCheckBox(self.deep_menu)
+            checkbox.setMinimumHeight(26)
+            checkbox.setStyleSheet('QCheckBox { padding:2px 8px; spacing:7px; }')
+            action.setDefaultWidget(checkbox)
+            self.deep_menu.addAction(action)
+            self.keyword_actions[mode] = checkbox
+        self.deep_menu.aboutToShow.connect(self.sync_keyword_filters)
+        self.date_tolerance_action = self.keyword_actions['date']
+        self.deep_btn.setMenu(self.deep_menu)
+        row.addWidget(self.deep_btn)
         row.addWidget(self.search_results_arrow)
         self.search_clear_btn = QPushButton()
         self.search_clear_btn.clicked.connect(self.clear_search_inputs)
@@ -2359,9 +2666,12 @@ class YoutubeDownloader(QMainWindow):
         row.addWidget(self.search_clear_btn)
         self.search_btn.setObjectName("primary")
         page.addWidget(self.search_card)
+        self.search_card.hide()
         self.group_model, self.member_model = QStringListModel(self), QStringListModel(self)
+        self.song_model = QStringListModel(self)
+        self.song_completer = QCompleter(self.song_model, self)
         self.group_completer, self.member_completer = QCompleter(self.group_model, self), QCompleter(self.member_model, self)
-        for edit, completer in ((self.group_edit, self.group_completer), (self.idol_edit, self.member_completer)):
+        for edit, completer in ((self.group_edit, self.group_completer), (self.idol_edit, self.member_completer), (self.song_edit, self.song_completer)):
             completer.setCompletionMode(QCompleter.CompletionMode.UnfilteredPopupCompletion)
             completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
             completer.setMaxVisibleItems(8)
@@ -2386,10 +2696,32 @@ class YoutubeDownloader(QMainWindow):
             for m in self.idol_catalogue.members
         } if self.idol_catalogue else {}
         self.member_resolve_timer = QTimer(self)
+        self.member_focus_popup_block_until = 0.0
         self.member_resolve_timer.setSingleShot(True)
         self.member_resolve_timer.setInterval(250)
         self.member_resolve_timer.timeout.connect(lambda: self.resolve_remembered_member(format_input=False))
         self.group_edit.textEdited.connect(self.search_group_edited)
+        self.song_refresh_timer = QTimer(self)
+        self.song_refresh_timer.setSingleShot(True)
+        self.song_refresh_timer.setInterval(350)
+        self.song_refresh_timer.timeout.connect(self.refresh_song_candidates)
+        self.group_edit.textChanged.connect(lambda: self.song_refresh_timer.start())
+        self.group_edit.textChanged.connect(self.cancel_other_song_loads)
+        self.song_edit.textEdited.connect(self.song_text_edited)
+        self.song_completer.activated[str].connect(self.choose_search_song)
+        self.song_edit.installEventFilter(self)
+        self.song_edit.returnPressed.connect(self.start_idol_search)
+        self.song_refresh_action = self.song_edit.addAction(self._button_icon("fa5s.sync-alt"), QLineEdit.ActionPosition.TrailingPosition)
+        self.song_refresh_action.triggered.connect(lambda: self.refresh_song_candidates(force=True))
+        self.song_refresh_button = next(button for button in self.song_edit.findChildren(QToolButton)
+                                        if button.defaultAction() is self.song_refresh_action)
+        self.song_loading_spinner = LoadingSpinner(self.song_refresh_button)
+        self.song_loading_spinner.setFixedSize(18, 18)
+        self.song_loading_spinner.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.song_list_action = self.song_edit.addAction(self._button_icon("fa5s.chevron-down"), QLineEdit.ActionPosition.TrailingPosition)
+        self.song_list_action.triggered.connect(self.toggle_song_list)
+        self.song_list_button = next(button for button in self.song_edit.findChildren(QToolButton)
+                                     if button.defaultAction() is self.song_list_action)
         self.group_completer.activated[str].connect(self.choose_search_group)
         self.group_edit.editingFinished.connect(self.resolve_search_group)
         self.idol_edit.textEdited.connect(self.search_member_edited)
@@ -2403,14 +2735,29 @@ class YoutubeDownloader(QMainWindow):
         popup_header = QHBoxLayout()
         self.results_status = QLabel()
         self.results_status.setWordWrap(True)
+        self.results_sort_combo = ChevronComboBox()
+        self.results_sort_combo.setMinimumWidth(140)
+        self.results_sort_combo.setMaxVisibleItems(5)
+        for mode in ('match', 'newest', 'oldest', 'longest', 'shortest'):
+            self.results_sort_combo.addItem(search_tr('sort_' + mode), mode)
+        saved_sort = self.results_sort_combo.findData(str(self.settings.value('search_result_sort', 'match')))
+        self.results_sort_combo.setCurrentIndex(max(0, saved_sort))
+        self.results_sort_combo.currentIndexChanged.connect(self.search_sort_changed)
+        self.search_error_btn = QPushButton("!")
+        self.search_error_btn.setFixedWidth(26)
+        self.search_error_btn.hide()
+        self.search_error_btn.clicked.connect(self.show_search_errors)
         self.results_close_btn = QPushButton("×")
         self.results_close_btn.setFixedWidth(30)
         self.results_close_btn.clicked.connect(self.results_popup.hide)
         popup_header.addWidget(self.results_status, 1)
+        popup_header.addWidget(self.results_sort_combo)
+        popup_header.addWidget(self.search_error_btn)
         popup_header.addWidget(self.results_close_btn)
         popup_layout.addLayout(popup_header)
         self.results_list = QListWidget()
         self.results_list.setObjectName("comboPopupList")
+        self.results_list.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self.results_list.setVerticalScrollBar(MinimalVerticalScrollBar())
         install_smooth_scroll(self.results_list)
         self.results_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -2435,8 +2782,44 @@ class YoutubeDownloader(QMainWindow):
         self.translate_search_ui()
 
     def eventFilter(self, watched, event):
+        if hasattr(self, "song_list_button"):
+            if event.type() == QEvent.Type.MouseButtonPress:
+                position = event.globalPosition().toPoint()
+                if self.deep_menu.isVisible() and not self.deep_menu.rect().contains(self.deep_menu.mapFromGlobal(position)):
+                    self.deep_menu.hide()
+                for edit in (self.group_edit, self.song_edit, self.idol_edit, self.search_date_edit):
+                    for button in edit.findChildren(QToolButton):
+                        if button is self.song_list_button or button.defaultAction() is self.song_refresh_action:
+                            continue
+                        if button.isVisible() and button.rect().contains(button.mapFromGlobal(position)):
+                            if edit is self.idol_edit:
+                                self.member_focus_popup_block_until = time.monotonic() + 0.5
+                            self.member_resolve_timer.stop()
+                            edit.clear()
+                            edit.textEdited.emit("")
+                            self.member_resolve_timer.stop()
+                            for completer in (self.group_completer, self.member_completer, self.song_completer):
+                                completer.popup().hide()
+                            return True
+            popup = self.song_completer.popup()
+            if event.type() == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_Escape:
+                self.song_list_requested = False
+                popup.hide()
+            if event.type() == QEvent.Type.MouseButtonPress:
+                position = event.globalPosition().toPoint()
+                over_arrow = self.song_list_button.rect().contains(self.song_list_button.mapFromGlobal(position))
+                over_clear = self.search_clear_btn.rect().contains(self.search_clear_btn.mapFromGlobal(position))
+                if popup.isVisible() and over_arrow:
+                    self.song_list_requested = False
+                    popup.hide()
+                    return True
+                if popup.isVisible() and over_clear:
+                    self.clear_search_inputs()
+                    return True
+                if not self.song_edit.rect().contains(self.song_edit.mapFromGlobal(position)) and not popup.rect().contains(popup.mapFromGlobal(position)):
+                    self.song_list_requested = False
         if hasattr(self, "member_completer") and event.type() == QEvent.Type.MouseButtonPress:
-            for edit, completer in ((self.group_edit, self.group_completer), (self.idol_edit, self.member_completer)):
+            for edit, completer in ((self.group_edit, self.group_completer), (self.idol_edit, self.member_completer), (self.song_edit, self.song_completer)):
                 popup = completer.popup()
                 inside_popup = watched is popup or (isinstance(watched, QWidget) and popup.isAncestorOf(watched))
                 if watched is not edit and not inside_popup:
@@ -2446,31 +2829,156 @@ class YoutubeDownloader(QMainWindow):
                 QTimer.singleShot(0, self.show_focused_member_candidates)
         return super().eventFilter(watched, event)
 
+    def toggle_kpop_search(self):
+        expanded = self.search_card.isHidden()
+        if expanded:
+            self.search_disclosure.layout().removeWidget(self.search_disclosure_arrow)
+            self.search_card.layout().insertWidget(0, self.search_disclosure_arrow)
+            self.search_disclosure.hide()
+        else:
+            self.search_card.layout().removeWidget(self.search_disclosure_arrow)
+            self.search_disclosure.layout().addWidget(self.search_disclosure_arrow)
+            self.search_disclosure.show()
+        self.search_card.setVisible(expanded)
+        self.search_disclosure_arrow.set_direction(expanded)
+        if not expanded:
+            self.results_popup.hide()
+            self.deep_menu.hide()
+            for completer in (self.group_completer, self.member_completer, self.song_completer):
+                completer.popup().hide()
+
     def show_focused_member_candidates(self):
-        if self.idol_edit.hasFocus():
+        if self.idol_edit.hasFocus() and time.monotonic() >= self.member_focus_popup_block_until:
             self.update_member_candidates(show=True)
 
     def completion_application_state(self, state):
         if state != Qt.ApplicationState.ApplicationActive:
             self.group_completer.popup().hide()
             self.member_completer.popup().hide()
+            self.song_completer.popup().hide()
 
     def hideEvent(self, event):
         if hasattr(self, "member_completer"):
             self.group_completer.popup().hide()
             self.member_completer.popup().hide()
+            self.song_completer.popup().hide()
         super().hideEvent(event)
+
+    def refresh_song_candidates(self, show=False, force=False, all_songs=False):
+        if not self.idol_catalogue:
+            return
+        if force:
+            self.song_catalogue = SongCatalogue(app_data_dir() / "idol_names" / "song_catalogue.json",
+                                                 bundled_path("idol_names/song_catalogue.json"))
+        group = self.idol_catalogue.resolve_group(self.group_edit.text()) if self.group_edit.text() else None
+        if not group and self.selected_idol_id and not self.song_edit.text().strip():
+            member = self.idol_catalogue.by_id.get(self.selected_idol_id)
+            group = self.idol_catalogue.resolve_group(member["group"]) if member else None
+        typed = "" if all_songs else normalize_idol(self.song_edit.text())
+        groups = [group['name']] if group else (list(self.song_catalogue.groups) if typed else [])
+        self.song_completion_matches = {}
+        for group_name in groups:
+            for song in self.song_catalogue.songs(group_name):
+                if typed and not any(typed in normalize_idol(alias) for alias in [song['title'], *song.get('aliases', [])]):
+                    continue
+                label = song['title'] if group else song['title'] + ' · ' + group_name
+                self.song_completion_matches[label] = (song['title'], group_name)
+        choices = list(self.song_completion_matches)
+        songs = self.song_catalogue.songs(group['name']) if group else []
+        if choices != self.song_model.stringList():
+            self.song_model.setStringList(choices)
+        self.size_completion_popup(self.song_edit, self.song_completer)
+        if show and self.song_edit.hasFocus() and self.song_model.rowCount():
+            self.song_completer.complete()
+        self.song_loading_spinner.stop()
+        self.song_edit.setToolTip((self.song_catalogue.groups.get(group['name'], {}).get('coverage', '')
+                                  if songs else search_tr('songs_local_missing')) if group else '')
+
+    def song_catalogue_ready(self, group, result):
+        try:
+            self.song_catalogue.save_group(group, result)
+        except OSError:
+            self.song_catalogue.groups[group] = result
+        self.song_edit.setToolTip(result.get("coverage", ""))
+        self.refresh_song_candidates(show=self.song_list_requested, all_songs=self.song_list_requested)
+
+    def cancel_other_song_loads(self, _text=None):
+        group = self.idol_catalogue.resolve_group(self.group_edit.text()) if self.idol_catalogue and self.group_edit.text() else None
+        name = group['name'] if group else None
+        for other, worker in self.song_workers.items():
+            if other != name:
+                worker.requestInterruption()
+        if not any(not w.isInterruptionRequested() for w in self.song_workers.values()):
+            self.song_loading_spinner.stop()
+            self.song_refresh_action.setIcon(self._button_icon("fa5s.sync-alt"))
+
+    def song_text_edited(self, text):
+        self.song_list_requested = False
+        self.refresh_song_candidates(show=bool(text))
+        if not text or not self.song_model.rowCount():
+            self.song_completer.popup().hide()
+
+    def choose_search_song(self, text):
+        self.song_list_requested = False
+        match = getattr(self, 'song_completion_matches', {}).get(text)
+        if match:
+            title, group_name = match
+            current = self.idol_catalogue.resolve_group(self.group_edit.text())
+            if not current or current['name'] != group_name:
+                member = self.idol_catalogue.by_id.get(self.selected_idol_id)
+                self.choose_search_group(group_name)
+                if member and member['group'] == group_name:
+                    self.selected_idol_id = member['id']
+            self.song_edit.setText(title)
+        else:
+            self.song_edit.setText(text)
+        self.song_completer.popup().hide()
+
+    def toggle_song_list(self):
+        if self.song_completer.popup().isVisible():
+            self.song_list_requested = False
+            self.song_completer.popup().hide()
+            return
+        self.song_list_requested = True
+        self.song_edit.setFocus()
+        self.refresh_song_candidates(show=True, all_songs=True)
+
+    def song_catalogue_failed(self, group, detail):
+        self.song_edit.setToolTip(search_tr("songs_missing") + "\n" + detail)
+        # Expose the real failure instead of requiring users to discover a tooltip.
+        self.song_loading_spinner.stop()
+        self.song_refresh_action.setIcon(self._button_icon("fa5s.sync-alt"))
+        QMessageBox.warning(self, search_tr("song"), group + "\n" + detail)
+
+    def song_catalogue_finished(self, name, worker):
+        self.song_workers.pop(name, None)
+        if not any(not w.isInterruptionRequested() for w in self.song_workers.values()):
+            self.song_loading_spinner.stop()
+            self.song_refresh_action.setIcon(self._button_icon("fa5s.sync-alt"))
+        worker.deleteLater()
 
     def size_completion_popup(self, edit, completer):
         completer.popup().setFixedWidth(max(100, edit.width()))
 
     def translate_search_ui(self):
+        self.search_disclosure_btn.setText(search_tr('kpop_search'))
         self.search_btn.setText(tr("cancel") if self.search_worker else search_tr("search"))
         self.search_clear_btn.setText("清空" if CURRENT_LANGUAGE == "zh" else tr("clear"))
         self.group_edit.setPlaceholderText(search_tr("group"))
+        self.song_edit.setPlaceholderText(search_tr("song"))
+        self.song_refresh_action.setToolTip(search_tr("songs_reload_local"))
+        self.song_list_action.setToolTip(search_tr("song"))
+        self.deep_btn.setToolTip(search_tr("keyword_filters"))
+        for mode, action in self.keyword_actions.items():
+            action.setText(search_tr(mode).split(' ')[0] if mode == 'date' else search_tr(mode))
+        self.keyword_actions['date'].setToolTip(search_tr('date_tolerance'))
+        self.date_tolerance_action.setText(('日期容错', 'Date tolerance', '日付許容', '날짜 허용', 'Tolérance date', 'Datumstoleranz', 'Допуск даты', 'Tolleranza data', 'Tolerancia fecha', 'تسامح التاريخ')[LANGUAGE_CODES.index(CURRENT_LANGUAGE)])
+        self.deep_menu.setFixedWidth(max(box.sizeHint().width() for box in self.keyword_actions.values()) + 12)
         self.idol_edit.setPlaceholderText(search_tr("member"))
         self.search_date_edit.setPlaceholderText(search_tr("date"))
         self.search_results_arrow.setToolTip(search_tr("search_results"))
+        for index in range(self.results_sort_combo.count()):
+            self.results_sort_combo.setItemText(index, search_tr('sort_' + self.results_sort_combo.itemData(index)))
         if hasattr(self, "batch_parse_btn"):
             self.select_all_results.setText(search_tr("select_all"))
             self.update_batch_selection()
@@ -2480,24 +2988,50 @@ class YoutubeDownloader(QMainWindow):
         if self.search_entries:
             self.render_search_results()
 
+    def update_deep_button(self, enabled):
+        self.deep_btn.setIcon(self._button_icon("fa5s.search-plus" if enabled else "fa5s.sliders-h"))
+        self.deep_btn.setProperty("deepEnabled", enabled)
+        self.deep_btn.style().unpolish(self.deep_btn)
+        self.deep_btn.style().polish(self.deep_btn)
+
+    def keyword_input_signature(self):
+        return tuple(edit.text().strip() for edit in (self.group_edit, self.song_edit, self.idol_edit, self.search_date_edit))
+
+    def sync_keyword_filters(self):
+        signature = self.keyword_input_signature()
+        if signature != self.keyword_filter_signature:
+            for (key, action), value in zip(self.keyword_actions.items(), signature):
+                action.setChecked(bool(value))
+                action.setEnabled(bool(value))
+            self.keyword_filter_signature = signature
+        self.date_tolerance_action.setEnabled(bool(self.search_date_edit.text().strip()))
+
     def clear_search_inputs(self):
+        self.song_list_requested = False
         self.member_resolve_timer.stop()
-        for edit in (self.group_edit, self.idol_edit, self.search_date_edit):
+        self.song_refresh_timer.stop()
+        for edit in (self.group_edit, self.song_edit, self.idol_edit, self.search_date_edit):
             edit.blockSignals(True)
             edit.clear()
             edit.blockSignals(False)
         self.selected_idol_id = None
         self.idol_input_alias = ""
+        self.cancel_other_song_loads()
         self.group_user_selected = False
         self.group_completer.popup().hide()
         self.member_completer.popup().hide()
+        self.song_completer.popup().hide()
+        self.song_model.setStringList([])
         self.member_model.setStringList([])
         self.member_labels = {}
         self.group_edit.setFocus()
 
     def search_group_edited(self, text):
         self.group_user_selected = bool(text)
-        self.selected_idol_id = None
+        member = self.idol_catalogue.by_id.get(self.selected_idol_id) if self.idol_catalogue else None
+        group = self.idol_catalogue.resolve_group(text) if self.idol_catalogue and text else None
+        if text and (not member or not group or member["group"] != group["name"]):
+            self.selected_idol_id = None
         if self.idol_catalogue:
             self.group_model.setStringList([g["name"] for g in self.idol_catalogue.group_matches(text)])
         self.size_completion_popup(self.group_edit, self.group_completer)
@@ -2516,6 +3050,8 @@ class YoutubeDownloader(QMainWindow):
                 self.group_edit.setText(group["name"])
 
     def search_member_edited(self, text):
+        if text:
+            self.member_focus_popup_block_until = 0.0
         completion_id = self.member_completion_ids.get(text.strip())
         if completion_id:
             self.choose_search_member(completion_id)
@@ -2597,9 +3133,12 @@ class YoutubeDownloader(QMainWindow):
         if not self.idol_catalogue:
             QMessageBox.warning(self, search_tr("search"), self.catalogue_error)
             return
+        chosen_requirements = ({key: action.isChecked() for key, action in self.keyword_actions.items()}
+                               if self.keyword_filter_signature == self.keyword_input_signature() else None)
         try:
             from idol_search import date_variants
-            date_variants(self.search_date_edit.text().strip())
+            if self.search_date_edit.text().strip():
+                date_variants(self.search_date_edit.text().strip())
         except ValueError:
             QMessageBox.warning(self, search_tr("search"), search_tr("date_error"))
             return
@@ -2613,7 +3152,10 @@ class YoutubeDownloader(QMainWindow):
             if not accepted:
                 return
             self.choose_search_group(choice)
+        group_was_empty = not self.group_edit.text().strip()
         self.resolve_remembered_member()
+        if group_was_empty:
+            self.group_edit.clear()
         name = self.idol_edit.text().strip()
         group = self.idol_catalogue.resolve_group(self.group_edit.text()) if self.group_edit.text() else None
         member = self.idol_catalogue.by_id.get(self.selected_idol_id)
@@ -2628,11 +3170,20 @@ class YoutubeDownloader(QMainWindow):
                 return
             self.choose_search_member(labels[choice])
             member = self.idol_catalogue.by_id[self.selected_idol_id]
-            group = self.idol_catalogue.resolve_group(member["group"])
-        if not group:
-            QMessageBox.warning(self, search_tr("search"), search_tr("identity_error"))
+            if group_was_empty:
+                self.group_edit.clear()
+            group = self.idol_catalogue.resolve_group(self.group_edit.text()) if self.group_edit.text() else None
+        song = self.song_edit.text().strip()
+        required = chosen_requirements
+        catalogue_group = group['name'] if group else (member['group'] if member else '')
+        try:
+            plan = make_keyword_search_plan(member if name else None, group, self.idol_input_alias or name,
+                                            self.search_date_edit.text().strip(), song,
+                                            self.song_catalogue.aliases(catalogue_group, song), required,
+                                            required is not None and self.date_tolerance_action.isChecked())
+        except ValueError:
+            QMessageBox.warning(self, search_tr("search"), search_tr("search_information_required"))
             return
-        plan = make_search_plan(member, group, self.idol_input_alias or name, self.search_date_edit.text().strip(), self.idol_catalogue)
         self.selected_search_ids.clear()
         self.search_entries = []
         self.search_progress_value = (0, len(plan["queries"]))
@@ -2644,6 +3195,9 @@ class YoutubeDownloader(QMainWindow):
         self.search_results_arrow.show()
         self.search_spinner.start()
         self.search_worker = IdolSearchWorker(plan)
+        self.search_error_details = []
+        self.search_error_btn.hide()
+        self.search_worker.diagnostics.connect(self.search_diagnostics)
         self.search_worker.results.connect(self.receive_search_results)
         self.search_worker.progress.connect(self.search_progress_changed)
         self.search_worker.failed.connect(lambda message: QMessageBox.warning(self, search_tr("search"), message))
@@ -2672,11 +3226,28 @@ class YoutubeDownloader(QMainWindow):
         else:
             text = search_tr("search_summary", count=len(self.search_entries), failed=self.search_failed_count)
         self.results_status.setText(text)
+        details = "\n\n".join(self.search_error_details)
+        self.results_status.setToolTip('')
+        self.search_error_btn.setVisible(bool(details))
+        self.search_error_btn.setToolTip(tr("error_details"))
+
+    def search_diagnostics(self, details):
+        self.search_error_details = details
+        self.search_failed_count = len(details)
+        self.update_search_status()
+
+    def show_search_errors(self):
+        message = QMessageBox(self)
+        message.setWindowTitle(tr("error_details"))
+        message.setText("\n\n".join(self.search_error_details))
+        message.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        message.exec()
 
     def search_finished(self):
         worker = self.search_worker
         if worker is not None:
             self.search_failed_count = worker.failed_queries
+            self.search_error_details = worker.error_details
             self.search_worker = None
             worker.deleteLater()
         self.search_spinner.stop()
@@ -2695,6 +3266,8 @@ class YoutubeDownloader(QMainWindow):
             self.show_search_results()
 
     def show_search_results(self):
+        if self.search_card.isHidden():
+            self.toggle_kpop_search()
         anchor = self.search_card
         self.results_popup.setStyleSheet(self.styleSheet())
         position = anchor.mapToGlobal(QPoint(0, anchor.height()))
@@ -2710,17 +3283,20 @@ class YoutubeDownloader(QMainWindow):
         self.results_list.clear()
         self.thumbnail_labels.clear()
         self.search_checks.clear()
-        action_icons = {name: self._button_icon(name) for name in ("fa5s.copy", "fa5s.external-link-alt")}
-        for entry in self.search_entries:
+        action_icons = {name: qta.icon(name, color=ACCENT) if qta is not None else self._button_icon(name)
+                        for name in ("fa5s.play", "fa5s.copy", "fa5s.external-link-alt")}
+        for entry in sorted_search_entries(self.search_entries, self.results_sort_combo.currentData()):
             item = QListWidgetItem()
             item.setSizeHint(QSize(0, 100))
             self.results_list.addItem(item)
             card = SearchResultCard()
+            card.set_selected(entry['id'] in self.selected_search_ids)
             row = QHBoxLayout(card)
             row.setContentsMargins(6, 6, 6, 6)
             checked = QCheckBox()
             checked.setChecked(entry["id"] in self.selected_search_ids)
             checked.toggled.connect(lambda state, video_id=entry["id"]: self.toggle_search_selection(video_id, state))
+            checked.toggled.connect(card.set_selected)
             self.search_checks[entry["id"]] = checked
             card.clicked.connect(checked.toggle)
             row.addWidget(checked)
@@ -2752,6 +3328,8 @@ class YoutubeDownloader(QMainWindow):
             author = entry.get("uploader") or entry.get("channel") or "—"
             duration = seconds_text(entry["duration"]) if entry.get("duration") is not None else "—"
             meta = QLabel(f"{author} · {duration} · {upload}")
+            if entry.get("_deep_result"):
+                meta.setText(meta.text() + " · " + search_tr("deep_result"))
             meta.setToolTip(meta.text())
             meta.setObjectName("subtitle")
             meta.setWordWrap(True)
@@ -2759,7 +3337,7 @@ class YoutubeDownloader(QMainWindow):
             row.addLayout(text_column, 1)
             tooltip = self.duplicate_tooltip(entry)
             if tooltip:
-                warning = QLabel("!")
+                warning = QLabel("✔")
                 warning.setFixedSize(22, 22)
                 warning.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 warning.setStyleSheet("background:#fff0cf;color:#ae6a00;border-radius:11px;font-weight:700;")
@@ -2768,13 +3346,16 @@ class YoutubeDownloader(QMainWindow):
             download = QPushButton(search_tr("search_download"))
             download.clicked.connect(lambda _checked=False, url=entry["webpage_url"]: self.parse_search_result(url))
             download.setEnabled(self.info_worker is None or not self.info_worker.isRunning())
-            for name, tip, callback in (("fa5s.copy", "copy_link", self.copy_search_link),
+            for name, tip, callback in (("fa5s.play", "play", self.play_search_video), ("fa5s.copy", "copy_link", self.copy_search_link),
                                          ("fa5s.external-link-alt", "open_video", self.open_search_link)):
                 action = QPushButton()
                 action.setObjectName("taskIcon")
-                action.setFixedSize(26, 26)
+                action.setProperty('themeIcon', name)
+                size = max(20, round(25 * (self.ui_scale or 1)))
+                action.setFixedSize(size, size)
                 action.setIcon(action_icons[name])
-                action.setIconSize(QSize(14, 14))
+                icon_size = max(11, round(13 * (self.ui_scale or 1)))
+                action.setIconSize(QSize(icon_size, icon_size))
                 action.setToolTip(tr(tip))
                 action.clicked.connect(lambda _checked=False, url=entry["webpage_url"], fn=callback: fn(url))
                 row.addWidget(action)
@@ -2791,8 +3372,19 @@ class YoutubeDownloader(QMainWindow):
     def copy_search_link(self, url):
         QApplication.clipboard().setText(url)
 
+    def play_search_video(self, url):
+        self.results_popup.hide()
+        if self.result_player is None:
+            self.result_player = SearchVideoPlayer(self, InfoWorker.fetch, playback_sources, tr, self._button_icon)
+        self.result_player.setStyleSheet(self.styleSheet())
+        self.result_player.open_video(url)
+
     def open_search_link(self, url):
         QDesktopServices.openUrl(QUrl(url))
+
+    def search_sort_changed(self, _index):
+        self.settings.setValue('search_result_sort', self.results_sort_combo.currentData())
+        self.render_search_results()
 
     def toggle_search_selection(self, video_id, checked):
         if checked:
@@ -3074,7 +3666,7 @@ class YoutubeDownloader(QMainWindow):
         self.meta_label.setObjectName("subtitle")
         meta_row = QHBoxLayout()
         meta_row.addWidget(self.meta_label, 1)
-        self.duplicate_indicator = QLabel("!")
+        self.duplicate_indicator = QLabel("✔")
         self.duplicate_indicator.setObjectName("duplicateIndicator")
         self.duplicate_indicator.setFixedSize(22, 22)
         self.duplicate_indicator.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -3107,11 +3699,13 @@ class YoutubeDownloader(QMainWindow):
         self.format_combo.setEnabled(False)
         self.format_combo.setMaxVisibleItems(14)
         right.addWidget(self.format_combo)
+        right.addSpacing(7)
         self.filename_section = self.section_label(tr("filename"))
         right.addWidget(self.filename_section)
         self.filename_edit = QLineEdit()
         self.filename_edit.setPlaceholderText(tr("filename_placeholder"))
         right.addWidget(self.filename_edit)
+        right.addSpacing(7)
         self.range_section = self.section_label(tr("download_range"))
         right.addWidget(self.range_section)
         self.range_combo = ChevronComboBox()
@@ -3336,7 +3930,7 @@ class YoutubeDownloader(QMainWindow):
         self.body_layout.setSpacing(max(10, round(16 * scale)))
         margins(self.left_layout, (16, 16, 16, 16))
         self.left_layout.setSpacing(max(6, round(9 * scale)))
-        margins(self.right_layout, (16, 12, 16, 12))
+        margins(self.right_layout, (16, 6, 16, 6))
         self.right_layout.setSpacing(max(4, round(6 * scale)))
         self.bottom_layout.setSpacing(max(10, round(16 * scale)))
         margins(self.task_box_layout, (14, 12, 14, 12))
@@ -3346,7 +3940,7 @@ class YoutubeDownloader(QMainWindow):
 
         self.cover_frame.set_scale(scale)
         self.clip_video_frame.set_scale(scale)
-        self.video_title.setMaximumHeight(max(35, round(48 * scale)))
+        self.video_title.setFixedHeight(max(35, round(48 * scale)))
         self.brand_title.setMinimumHeight(max(34, round(44 * scale)))
         self.brand_subtitle.setMinimumHeight(max(17, round(20 * scale)))
         self.task_scroll.setMinimumHeight(max(150, round(210 * scale)))
@@ -3363,6 +3957,7 @@ class YoutubeDownloader(QMainWindow):
         self.range_combo.set_scale(scale)
         self.audio_combo.set_scale(scale)
         self.concurrency_combo.set_scale(scale)
+        self.results_sort_combo.set_scale(scale)
         for label in self.section_labels:
             label.setMinimumHeight(max(20, round(26 * scale)))
         for label in (self.format_section, self.filename_section, self.range_section):
@@ -3370,6 +3965,8 @@ class YoutubeDownloader(QMainWindow):
         for _manager, card in self.tasks:
             card.set_scale(scale)
         self.apply_style(scale)
+        self.meta_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        self.meta_label.setFixedHeight(self.meta_label.fontMetrics().height() + 2)
         self.range_label.setMinimumHeight(self.range_label.fontMetrics().height())
         # Reserve the options panel's real minimum height, including styled
         # controls, so Qt cannot compress its final rows into one another.
@@ -3488,15 +4085,27 @@ class YoutubeDownloader(QMainWindow):
         self.range_combo.set_theme(self.dark_mode)
         self.audio_combo.set_theme(self.dark_mode)
         self.concurrency_combo.set_theme(self.dark_mode)
+        self.results_sort_combo.set_theme(self.dark_mode)
         self.clip_timeline.set_theme(self.dark_mode)
         self.language_btn.set_theme(self.dark_mode)
         self.engine_update_btn.setIcon(self._button_icon("fa5s.sync-alt"))
         self.search_results_arrow.set_theme(self.dark_mode)
+        self.search_disclosure_arrow.set_theme(self.dark_mode)
+        self.update_deep_button(bool(self.deep_btn.property('deepEnabled')))
+        self.song_refresh_action.setIcon(self._button_icon('fa5s.sync-alt'))
+        self.song_list_action.setIcon(self._button_icon('fa5s.chevron-down'))
+        for checkbox in self.keyword_actions.values():
+            checkbox.update()
+        for icon_button in self.findChildren(QPushButton):
+            icon_name = icon_button.property('themeIcon')
+            if icon_name and qta is not None:
+                icon_button.setIcon(qta.icon(icon_name, color=accent))
         self.setStyleSheet(f"""
             QMainWindow, QWidget {{ background:{bg}; color:{text}; font-family:'Segoe UI','Microsoft YaHei UI'; font-size:{px(13, 10)}px; }}
             QFrame#card, QFrame#optionsCard, QFrame#taskCard {{ background:{card}; border:1px solid {border}; border-radius:{px(12, 8)}px; }}
             QFrame#taskCard[failed="true"] {{ background:{danger_bg}; border:1px solid {DANGER}; }}
             QFrame#taskCard[failed="true"] QLabel {{ background:transparent; }}
+            QFrame#taskCard[checkWarning="true"] {{ background:{'#392f1e' if self.dark_mode else '#fff7e6'}; }}
             QLabel#appTitle {{ font-family:'Eras Demi ITC'; font-size:{px(31, 23)}px; font-weight:400; }}
             QLabel#brandSubtitle {{ color:{muted}; font-family:'Palatino Linotype'; font-size:{px(13, 11)}px; font-style:italic; font-weight:600; letter-spacing:{px(1)}px; padding-left:{px(3, 2)}px; }}
             QLabel#subtitle, QLabel#taskDetail {{ color:{muted}; background:transparent; border:0; }}
@@ -3521,6 +4130,9 @@ class YoutubeDownloader(QMainWindow):
             QListWidget#comboPopupList {{ background:{card}; color:{text}; border:0; outline:0; margin:0; padding:{px(2, 1)}px; }}
             QListWidget#comboPopupList::item {{ border:0; outline:0; margin:0; padding:0 {px(7, 5)}px; }}
             QListWidget#comboPopupList::item:hover, QListWidget#comboPopupList::item:selected {{ background:{popup_hover}; color:{text}; border:0; outline:0; }}
+            QWidget#searchResultCard {{ background:transparent; }}
+            QWidget#searchResultCard:hover, QWidget#searchResultCard[chosen="true"] {{ background:{popup_hover}; }}
+            QWidget#searchResultCard QLabel, QWidget#searchResultCard QCheckBox {{ background:transparent; }}
             QPushButton {{ background:{button}; border:0; border-radius:{px(7, 5)}px; padding:{px(8, 5)}px {px(13, 9)}px; font-weight:600; }}
             QPushButton:hover {{ background:{button_hover}; }} QPushButton:disabled {{ color:#8e949f; background:{disabled}; }}
             QPushButton#primary {{ color:white; background:{accent}; }} QPushButton#primary:hover {{ background:{accent_hover}; }}
@@ -3531,6 +4143,9 @@ class YoutubeDownloader(QMainWindow):
             QPushButton#taskIcon:hover {{ background:{button_hover}; }}
             QPushButton#headerIcon {{ background:transparent; padding:{px(6, 4)}px; border-radius:{px(6, 4)}px; }}
             QPushButton#headerIcon:hover {{ background:{button_hover}; }}
+            QPushButton#searchDisclosure {{ background:transparent; text-align:left; padding:3px 5px; }}
+            QPushButton#searchDisclosure:hover {{ background:{button_hover}; }}
+            QPushButton#headerIcon[deepEnabled="true"] {{ background:{popup_hover}; }}
             QPushButton#themeSwitch {{ font-family:'Segoe UI Symbol'; font-size:{px(17, 13)}px; min-width:{px(22, 17)}px; padding:{px(6, 4)}px; }}
             QPushButton#languageSwitch {{ min-width:{px(31, 24)}px; min-height:{px(25, 20)}px; padding:{px(3, 2)}px; }}
             QMenu {{ background:{card}; color:{text}; border:1px solid {border}; padding:{px(5, 3)}px; }}
@@ -3545,7 +4160,7 @@ class YoutubeDownloader(QMainWindow):
         if self.audio_combo.popup_frame is not None:
             self.audio_combo.popup_frame.setStyleSheet(self.styleSheet())
         self.results_popup.setStyleSheet(self.styleSheet())
-        for completer in (self.group_completer, self.member_completer):
+        for completer in (self.group_completer, self.member_completer, self.song_completer):
             completer.popup().setStyleSheet(f"QListView {{ background:{card}; color:{text}; border:1px solid {border}; padding:0; }} QListView::item {{ padding:0 8px; border:0; margin:0; }} QListView::item:hover, QListView::item:selected {{ background:{popup_hover}; color:{text}; border:0; }}")
         for bar in self.findChildren(MinimalVerticalScrollBar):
             bar.set_theme(self.dark_mode)
@@ -3840,7 +4455,7 @@ class YoutubeDownloader(QMainWindow):
                 return
             ffprobe = Path(found)
         scanner = LibraryScanner(Path(r"D:\youtube videos"), ffprobe,
-            runtime_dir() / ".media-library-cache.json", runtime_dir() / ".download-source-index.json")
+            app_data_file('.media-library-cache.json', migrate=True), app_data_file('.download-source-index.json', migrate=True))
         self.library_worker = LibraryWorker(scanner, self)
         self.library_worker.ready.connect(self.library_scan_ready)
         self.library_worker.failed.connect(lambda detail: setattr(self, "library_error", detail))
@@ -3882,7 +4497,7 @@ class YoutubeDownloader(QMainWindow):
 
     def record_completed_download(self, manager, title):
         try:
-            remember_download(runtime_dir() / ".download-source-index.json", manager.output_path,
+            remember_download(app_data_file('.download-source-index.json', migrate=True), manager.output_path,
                               manager.url, title, manager.section)
         except OSError:
             return
@@ -4501,6 +5116,10 @@ class YoutubeDownloader(QMainWindow):
             overwrite=pending.get("overwrite", False),
             progress_components=fmt.get("progress_components"), parent=self,
         )
+        task_info = pending.get("info") or self.info or {}
+        manager.expected_duration = task_info.get("duration") or 0
+        manager.video_required = not bool(fmt.get("audio_ext"))
+        manager.audio_required = bool(fmt.get("audio_ext")) or "+" in fmt["selector"] or fmt.get("acodec") not in (None, "none")
         card = DownloadTaskWidget(manager, pending.get("thumbnail", self.thumbnail_bytes))
         card.set_scale(self.ui_scale or 1.0)
         card.removed.connect(self.remove_task)
@@ -4518,6 +5137,11 @@ class YoutubeDownloader(QMainWindow):
         return manager
 
     def remove_task(self, card):
+        worker = card.manager.check_worker
+        if worker is not None and worker.isRunning():
+            worker.requestInterruption()
+            QTimer.singleShot(100, lambda: self.remove_task(card))
+            return
         for index, (manager, widget) in enumerate(list(self.tasks)):
             if widget is card:
                 self.tasks.pop(index)
@@ -4534,6 +5158,26 @@ class YoutubeDownloader(QMainWindow):
             card.setVisible(index >= len(self.tasks) - MAX_TASKS)
 
     def closeEvent(self, event):
+        if self.result_player is not None:
+            self.result_player.close()
+            if self.result_player.workers:
+                event.ignore()
+                QTimer.singleShot(200, self.close)
+                return
+        checking = [manager.check_worker for manager, _ in self.tasks if manager.check_worker is not None and manager.check_worker.isRunning()]
+        if checking:
+            for worker in checking:
+                worker.requestInterruption()
+            event.ignore()
+            QTimer.singleShot(200, self.close)
+            return
+        self.song_refresh_timer.stop()
+        if self.song_workers:
+            for worker in self.song_workers.values():
+                worker.requestInterruption()
+            event.ignore()
+            QTimer.singleShot(200, self.close)
+            return
         if self.batch_worker is not None:
             self.batch_worker.cancelled.set()
             event.ignore()
@@ -4577,6 +5221,10 @@ class YoutubeDownloader(QMainWindow):
             return
         for reply in list(self.thumbnail_replies.values()):
             reply.abort()
+        application = QApplication.instance()
+        application.removeEventFilter(self)
+        for combo in self.findChildren(ChevronComboBox):
+            application.removeEventFilter(combo)
         event.accept()
 
 
@@ -4590,10 +5238,26 @@ if __name__ == "__main__":
     except Exception:
         details = traceback.format_exc()
         try:
-            (runtime_dir() / "ytdl_startup_error.log").write_text(details, encoding="utf-8")
+            app_data_file('ytdl_startup_error.log').write_text(details, encoding="utf-8")
         except OSError:
             pass
         QMessageBox.critical(None, tr("startup_failed_title"), tr("startup_failed_message", value=details[-1200:]))
         sys.exit(1)
     window.show()
+    if os.environ.get('YTDL_SMOKE_REPORT'):
+        def write_smoke_report():
+            report = Path(os.environ['YTDL_SMOKE_REPORT'])
+            report.parent.mkdir(parents=True, exist_ok=True)
+            report.write_text(json.dumps({
+                'frozen': bool(getattr(sys, 'frozen', False)),
+                'data_dir': str(app_data_dir()),
+                'engine_exists': engine_path().is_file(),
+                'catalogue_loaded': bool(window.idol_catalogue),
+                'song_groups': len(window.song_catalogue.groups),
+                'search_collapsed': window.search_card.isHidden(),
+                'downloaded_indicator': window.duplicate_indicator.text(),
+                'sort_modes': [window.results_sort_combo.itemData(i) for i in range(window.results_sort_combo.count())],
+            }, ensure_ascii=False, indent=2), encoding='utf-8')
+            window.close()
+        QTimer.singleShot(1200, write_smoke_report)
     sys.exit(app.exec())

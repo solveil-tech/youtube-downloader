@@ -6,7 +6,8 @@ root = os.path.abspath(SPECPATH)
 qt_bin = os.path.join(root, ".buildenv", "Lib", "site-packages", "PyQt6", "Qt6", "bin")
 
 datas = [(os.path.join(root, "icon.ico"), "."),
-         (os.path.join(root, "idol_names", "idol_aliases.json"), "idol_names")]
+         (os.path.join(root, "idol_names", "idol_aliases.json"), "idol_names"),
+         (os.path.join(root, "idol_names", "song_catalogue.json"), "idol_names")]
 binaries = [
     (os.path.join(root, "yt_dlp.exe"), "."),
     (os.path.join(qt_bin, "concrt140.dll"), "PyQt6/Qt6/bin"),

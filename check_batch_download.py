@@ -88,12 +88,18 @@ with tempfile.TemporaryDirectory(dir=Path(__file__).parent / ".checkenv") as dir
     assert first_check.isChecked(), "Clicking thumbnail did not select result"
     assert any("2026-09-19" in label.text() and "≈" not in label.text() for label in first_card.findChildren(QLabel))
     icons = [button for button in first_card.findChildren(QPushButton) if button.objectName() == "taskIcon"]
-    assert len(icons) == 2
-    icons[0].click()
+    assert len(icons) == 3, "Expected play, copy and browser actions"
+    # Exercise playback dispatch without opening an online stream or emitting sound.
+    with patch.object(ytdl, "SearchVideoPlayer") as player_factory:
+        icons[0].click()
+        player_factory.return_value.open_video.assert_called_once_with(entries[0]["webpage_url"])
+    window.result_player = None
+    assert first_check.isChecked(), "Play action changed selection"
+    icons[1].click()
     assert QApplication.clipboard().text() == entries[0]["webpage_url"]
     assert first_check.isChecked(), "Copy action changed selection"
     with patch.object(ytdl.QDesktopServices, "openUrl", return_value=True) as browser:
-        icons[1].click()
+        icons[2].click()
         assert browser.call_args.args[0].toString() == entries[0]["webpage_url"]
     window.select_all_search_results(True)
     window.render_search_results()
@@ -205,6 +211,7 @@ with tempfile.TemporaryDirectory(dir=Path(__file__).parent / ".checkenv") as dir
         assert window.preview_player.hasAudio(), "Preview player did not recognize audio stream"
         assert window.preview_player.audioOutput() is window.preview_audio
         assert not window.preview_audio.isMuted() and window.preview_audio.volume() > 0
+        window.preview_audio.setMuted(True)
         window.toggle_preview()
         QTest.qWait(300)
         assert window.preview_player.position() > 0, "Audio/video preview did not play"

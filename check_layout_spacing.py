@@ -34,6 +34,13 @@ with TemporaryDirectory(dir=Path(__file__).parent / '.checkenv') as folder:
             assert window.search_btn.width() > window.search_clear_btn.width()
             row = window.search_card.layout()
             assert row.indexOf(window.search_btn) + 1 == row.indexOf(window.search_clear_btn)
+            window.toggle_kpop_search()
+            QTest.qWait(30)
+            assert not window.search_card.isHidden()
+            assert window.right_layout.parentWidget().geometry().bottom() + 4 < window.clip_panel.geometry().top(), 'Expanded search overlaps clip panel'
+            window.toggle_kpop_search()
+            QTest.qWait(20)
+            assert window.search_card.isHidden()
     window.set_language('zh')
     window.resize(860, 700)
     QTest.qWait(80)

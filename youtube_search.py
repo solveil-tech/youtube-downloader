@@ -1,10 +1,43 @@
 """Read current YouTube search renderers, including Shorts skipped by yt-dlp."""
 import json
 import re
+import time
+from threading import Lock
 import requests
 from idol_search import search_url
 
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36"
+_request_lock = Lock()
+_next_request = 0.0
+_cooldown_until = 0.0
+_metadata_cache = {}
+
+class YouTubeRateLimit(RuntimeError):
+    pass
+
+def rate_limit_check():
+    if time.monotonic() < _cooldown_until:
+        raise YouTubeRateLimit('YouTube HTTP 429: requests temporarily limited; pause and retry later.')
+
+def limited_request(fetch, url, cancelled, **kwargs):
+    global _next_request, _cooldown_until
+    while True:
+        if cancelled():
+            raise InterruptedError()
+        with _request_lock:
+            rate_limit_check()
+            delay = _next_request - time.monotonic()
+            if delay <= 0:
+                _next_request = time.monotonic() + 0.6
+                break
+        time.sleep(min(0.1, delay))
+    response = fetch(url, **kwargs)
+    if response.status_code == 429 or 'google.com/sorry/' in str(response.url):
+        with _request_lock:
+            _cooldown_until = time.monotonic() + 60
+        raise YouTubeRateLimit('YouTube HTTP 429: requests temporarily limited; pause and retry later.')
+    response.raise_for_status()
+    return response
 
 
 def objects(value):
@@ -89,7 +122,11 @@ def complete_short_metadata(entry, cancelled=lambda: False):
     """Fetch public player metadata, not media/formats; never invent missing fields."""
     if cancelled():
         return entry
-    response = requests.get("https://www.youtube.com/watch", params={"v": entry["id"], "hl": "en"},
+    with _request_lock:
+        cached = _metadata_cache.get(entry['id'])
+    if cached and time.monotonic() - cached[0] < 1800:
+        return {**entry, **cached[1]}
+    response = limited_request(requests.get, "https://www.youtube.com/watch", cancelled, params={"v": entry["id"], "hl": "en"},
                             headers={"User-Agent": USER_AGENT}, timeout=(5, 12))
     response.raise_for_status()
     match = re.search(r'(?:var\s+ytInitialPlayerResponse\s*=|ytInitialPlayerResponse\s*=)\s*', response.text)
@@ -107,11 +144,18 @@ def complete_short_metadata(entry, cancelled=lambda: False):
     length = details.get("lengthSeconds")
     if str(length or "").isdigit():
         completed["duration"] = int(length)
-    date = micro.get("uploadDate") or micro.get("publishDate")
+    date = micro.get("publishDate") or micro.get("uploadDate")
     if date and re.match(r"\d{4}-\d{2}-\d{2}", date):
         completed["upload_date"] = date[:10].replace("-", "")
+        completed["publish_date"] = completed["upload_date"]
+        completed["_publish_verified"] = True
     completed["_metadata_complete"] = bool(completed.get("uploader") and
                                            completed.get("duration") is not None and completed.get("upload_date"))
+    if completed['_metadata_complete']:
+        with _request_lock:
+            _metadata_cache[entry['id']] = (time.monotonic(), completed)
+            if len(_metadata_cache) > 512:
+                _metadata_cache.pop(next(iter(_metadata_cache)))
     return completed
 
 
@@ -130,7 +174,7 @@ def search_short_pages(query, cancelled=lambda: False, max_pages=3):
     entries, seen_tokens = {}, set()
     with requests.Session() as session:
         session.headers.update({"User-Agent": USER_AGENT, "Accept-Language": "en-GB,en;q=0.9"})
-        response = session.get(search_url(query, shorts=True), params={"hl": "en", "gl": "GB"}, timeout=(5, 12))
+        response = limited_request(session.get, search_url(query, shorts=True), cancelled, params={"hl": "en", "gl": "GB"}, timeout=(5, 12))
         response.raise_for_status()
         data, config = initial_data(response.text), search_config(response.text)
         context = config.get("INNERTUBE_CONTEXT")
@@ -146,11 +190,11 @@ def search_short_pages(query, cancelled=lambda: False, max_pages=3):
             if cancelled():
                 return []
             try:
-                response = session.post("https://www.youtube.com/youtubei/v1/search", params={"prettyPrint": "false"},
+                response = limited_request(session.post, "https://www.youtube.com/youtubei/v1/search", cancelled, params={"prettyPrint": "false"},
                                         json={"context": context, "continuation": token}, timeout=(5, 12))
                 response.raise_for_status()
                 data = response.json()
-            except (requests.RequestException, ValueError):
+            except (requests.RequestException, ValueError, YouTubeRateLimit):
                 # A failed later page must not discard successful first-page results.
                 break
     return list(entries.values())

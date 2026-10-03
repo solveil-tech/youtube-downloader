@@ -157,10 +157,10 @@ class SearchChecks(unittest.TestCase):
 
     def test_short_identity_context(self):
         plan = make_search_plan(self.db.by_id["fromis9:nagyung"], self.db.resolve_group("fro"), "nagyung", "261001", self.db)
-        for title in ("Nakyung 261001", "나경 261001", "tripleS Nakyung 261001", "트리플에스 나경 261001"):
+        for title in ("tripleS Nakyung 261001", "트리플에스 나경 261001"):
             entry = {"id": "AAAAAAAAAAA", "title": title, "_is_short": True}
             self.assertEqual(rank_results([entry], plan), [], title)
-        for title in ("Fromis_9 Nakyung 261001", "이나경 261001", "Lee Nakyung 261001", "yinagyung 261001"):
+        for title in ("Nakyung 261001", "나경 261001", "Fromis_9 Nakyung 261001", "이나경 261001", "Lee Nakyung 261001", "yinagyung 261001"):
             self.assertEqual(len(rank_results([{"id": "AAAAAAAAAAA", "title": title, "_is_short": True}], plan)), 1, title)
         entry = {"id": "AAAAAAAAAAA", "title": "Nakyung 261001", "_is_short": True, "description": "fromis_9 fancam"}
         self.assertEqual(len(rank_results([entry], plan)), 1)

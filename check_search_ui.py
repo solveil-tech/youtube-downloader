@@ -3,7 +3,8 @@ import os
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 import tempfile
 from pathlib import Path
-from PyQt6.QtCore import QSettings, Qt
+from PyQt6.QtCore import QEvent, QPointF, QSettings, Qt
+from PyQt6.QtGui import QMouseEvent
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 import ytdl
@@ -19,6 +20,7 @@ with tempfile.TemporaryDirectory(dir=Path(__file__).parent / ".checkenv") as tem
     window.start_library_scan = lambda *args, **kwargs: None
     window.request_search_thumbnail = lambda entry: None
     window.show()
+    window.toggle_kpop_search()
     app.processEvents()
     duplicate_file = Path(temporary) / "renamed.mp4"
     duplicate_file.touch()
@@ -46,7 +48,7 @@ with tempfile.TemporaryDirectory(dir=Path(__file__).parent / ".checkenv") as tem
     completion.scrollTo(index)
     QTest.mouseClick(completion.viewport(), Qt.MouseButton.LeftButton,
                      pos=completion.visualRect(index).center())
-    app.processEvents()
+    QTest.qWait(60)
     print("REAL_COMPLETION", window.idol_edit.text(), window.group_edit.text(), window.selected_idol_id)
     assert window.selected_idol_id == "nmixx:kyujin", "Actual dropdown selection lost identity"
     heights = [completion.sizeHintForRow(row) for row in range(model.rowCount())]
@@ -58,20 +60,29 @@ with tempfile.TemporaryDirectory(dir=Path(__file__).parent / ".checkenv") as tem
     model = completion.model()
     hover_index = model.index(1, 0)
     completion.scrollTo(hover_index)
-    QTest.mouseMove(completion.viewport(), completion.rect().bottomRight())
-    app.processEvents()
+    completion.setCurrentIndex(model.index(0, 0))
+    def move_completion(index):
+        point = completion.visualRect(index).center()
+        event = QMouseEvent(QEvent.Type.MouseMove, QPointF(point),
+                           QPointF(completion.viewport().mapToGlobal(point)), Qt.MouseButton.NoButton,
+                           Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier)
+        QApplication.sendEvent(completion.viewport(), event)
+    move_completion(model.index(0, 0))
+    QTest.qWait(60)
     hover_rect = completion.visualRect(hover_index)
     color_point = hover_rect.topLeft()
-    color_point.setX(hover_rect.right() - 12)
+    color_point.setX(min(hover_rect.right(), completion.viewport().width() - 1) - 12)
     color_point.setY(hover_rect.center().y())
     before_hover = completion.viewport().grab().toImage().pixelColor(color_point)
     before_text = window.idol_edit.text()
-    QTest.mouseMove(completion.viewport(), completion.visualRect(hover_index).center())
-    app.processEvents()
+    move_completion(hover_index)
+    QTest.qWait(60)
     after_hover = completion.viewport().grab().toImage().pixelColor(color_point)
     assert after_hover != before_hover, "Mouse hover did not change candidate background"
     assert window.idol_edit.text() == before_text, "Hover changed selected identity"
     completion.hide()
+    # Restore the real identity after the synthetic two-row completion model.
+    window.choose_search_member("nmixx:kyujin")
     window.update_member_candidates()
     assert window.search_card.layout().indexOf(window.search_results_arrow) + 1 == window.search_card.layout().indexOf(window.search_btn)
     assert window.search_card.layout().indexOf(window.search_btn) + 1 == window.search_card.layout().indexOf(window.search_clear_btn)
