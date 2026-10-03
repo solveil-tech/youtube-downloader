@@ -73,7 +73,7 @@ def member_display_name(member):
 
 class IdolCatalogue:
     def __init__(self, path):
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        data = path if isinstance(path, dict) else json.loads(Path(path).read_text(encoding="utf-8"))
         self.groups = data["groups"]
         self.members = data["members"]
         self.by_id = {m["id"]: m for m in self.members}

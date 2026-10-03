@@ -12,7 +12,7 @@ path = root / 'song_catalogue.json'
 db = json.loads(path.read_text(encoding='utf-8'))
 for name, supplement in json.loads((root / 'song_supplement.json').read_text(encoding='utf-8')).items():
     db['groups'][name] = {'source': supplement['source'], 'coverage': 'Locally verified selected released songs; partial catalogue',
-                         'songs': [{'title': title, 'aliases': [], 'sources': [supplement['source']]} for title in supplement['titles']]}
+                         'songs': supplement.get('songs') or [{'title': title, 'aliases': [], 'sources': [supplement['source']]} for title in supplement['titles']]}
 for group in db['groups'].values():
     songs = {}
     for song in group['songs']:

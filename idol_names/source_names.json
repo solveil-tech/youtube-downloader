@@ -8097,6 +8097,57 @@
           "source_url": "https://kprofiles.com/hi-hat-girls-members-profile/"
         }
       ]
+    },
+    {
+      "name": "Baby DONT Cry",
+      "korean": "베이비돈크라이",
+      "aliases": [
+        "Baby DONT Cry",
+        "베이비돈크라이",
+        "Baby Don't Cry",
+        "BabyDontCry",
+        "Baby Dont Cry",
+        "베돈크"
+      ],
+      "source_url": "https://kprofiles.com/baby-dont-cry-members-profile/",
+      "records": [
+        {
+          "group": "Baby DONT Cry",
+          "stage_raw": "Yihyun (이현)",
+          "fields": {
+            "birth name": "Jo Yi Hyun (조이현)"
+          },
+          "historical_section": false,
+          "source_url": "https://kprofiles.com/baby-dont-cry-members-profile/"
+        },
+        {
+          "group": "Baby DONT Cry",
+          "stage_raw": "Kumi (쿠미)",
+          "fields": {
+            "birth name": "Takei Miku (武井 未来)"
+          },
+          "historical_section": false,
+          "source_url": "https://kprofiles.com/baby-dont-cry-members-profile/"
+        },
+        {
+          "group": "Baby DONT Cry",
+          "stage_raw": "Mia (미아)",
+          "fields": {
+            "birth name": "Kunii Hinano (国井 ひなの)"
+          },
+          "historical_section": false,
+          "source_url": "https://kprofiles.com/baby-dont-cry-members-profile/"
+        },
+        {
+          "group": "Baby DONT Cry",
+          "stage_raw": "Beni (베니)",
+          "fields": {
+            "birth name": "Kang Han Bit (강한빛)"
+          },
+          "historical_section": false,
+          "source_url": "https://kprofiles.com/baby-dont-cry-members-profile/"
+        }
+      ]
     }
   ],
   "failures": []

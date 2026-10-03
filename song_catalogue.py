@@ -89,7 +89,7 @@ def fetch_group_songs(group, cancelled=lambda: False):
 
 
 class SongCatalogue:
-    def __init__(self, path, bundled=None):
+    def __init__(self, path, bundled=None, base_data=None):
         self.path = Path(path)
         self.groups = {}
         for candidate in (bundled, self.path):
@@ -98,6 +98,9 @@ class SongCatalogue:
                     self.groups.update(json.loads(Path(candidate).read_text(encoding='utf-8')).get('groups', {}))
             except (OSError, ValueError):
                 pass
+        if base_data is not None:
+            # A manually updated catalogue is authoritative over old song caches.
+            self.groups.update(base_data['groups'])
 
     def songs(self, group):
         return self.groups.get(group, {}).get('songs', [])

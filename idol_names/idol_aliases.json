@@ -1,10 +1,10 @@
 {
   "schema_version": 2,
-  "as_of": "2026-10-01",
+  "as_of": "2026-10-03",
   "chinese_summary": {
     "policy": "Official usage outranks community usage. Counts mean distinct cited pages, not internet-wide popularity. Simplified equivalents are display/search conversions, not new official attestations. Missing entries remain pending.",
     "coverage": 39,
-    "pending": 711,
+    "pending": 715,
     "official_usage": 5,
     "official_confirmed": 0
   },
@@ -1041,6 +1041,19 @@
         "if-eye"
       ],
       "source_url": "https://kprofiles.com/hi-hat-girls-members-profile/"
+    },
+    {
+      "name": "Baby DONT Cry",
+      "korean": "베이비돈크라이",
+      "aliases": [
+        "Baby DONT Cry",
+        "베이비돈크라이",
+        "Baby Don't Cry",
+        "BabyDontCry",
+        "Baby Dont Cry",
+        "베돈크"
+      ],
+      "source_url": "https://kprofiles.com/baby-dont-cry-members-profile/"
     }
   ],
   "members": [
@@ -76577,6 +76590,359 @@
       "chinese_name_status": "pending",
       "chinese_name_selection": null,
       "chinese_names": []
+    },
+    {
+      "id": "babydontcry:yihyun",
+      "group": "Baby DONT Cry",
+      "stage_name": "Yihyun",
+      "stage_name_hangul": "이현",
+      "full_name": "Jo Yi Hyun",
+      "full_name_hangul": "조이현",
+      "historical_section": false,
+      "verification": "community_profile_extracted",
+      "source_url": "https://kprofiles.com/baby-dont-cry-members-profile/",
+      "raw_name_fields": {
+        "birth name": "Jo Yi Hyun (조이현)"
+      },
+      "aliases": [
+        {
+          "text": "Yihyun",
+          "normalized": "yihyun",
+          "kind": "source_stage",
+          "priority": 100,
+          "evidence": "https://kprofiles.com/baby-dont-cry-members-profile/"
+        },
+        {
+          "text": "이현",
+          "normalized": "이현",
+          "kind": "source_stage_hangul",
+          "priority": 100,
+          "evidence": "https://kprofiles.com/baby-dont-cry-members-profile/"
+        },
+        {
+          "text": "Jo Yi Hyun",
+          "normalized": "joyihyun",
+          "kind": "source_birth_name",
+          "priority": 90,
+          "evidence": "https://kprofiles.com/baby-dont-cry-members-profile/"
+        },
+        {
+          "text": "조이현",
+          "normalized": "조이현",
+          "kind": "source_hangul",
+          "priority": 95,
+          "evidence": "https://kprofiles.com/baby-dont-cry-members-profile/"
+        },
+        {
+          "text": "JoYiHyun",
+          "normalized": "joyihyun",
+          "kind": "generated_format",
+          "priority": 85,
+          "evidence": "remove separators / split hyphens"
+        },
+        {
+          "text": "Yi Hyun",
+          "normalized": "yihyun",
+          "kind": "generated_given_name",
+          "priority": 80,
+          "evidence": "given name candidate by removing first name token"
+        },
+        {
+          "text": "yihyun",
+          "normalized": "yihyun",
+          "kind": "generated_format",
+          "priority": 80,
+          "evidence": "given name without separators"
+        },
+        {
+          "text": "이현",
+          "normalized": "이현",
+          "kind": "generated_given_hangul",
+          "priority": 80,
+          "evidence": "Hangul family-name removal; candidate only"
+        },
+        {
+          "text": "cho Yi Hyun",
+          "normalized": "choyihyun",
+          "kind": "generated_romanization",
+          "priority": 50,
+          "evidence": "family-name spelling variant"
+        },
+        {
+          "text": "choyihyun",
+          "normalized": "choyihyun",
+          "kind": "generated_romanization",
+          "priority": 50,
+          "evidence": "family-name spelling variant"
+        },
+        {
+          "text": "ihyeon",
+          "normalized": "ihyeon",
+          "kind": "generated_hangul_romanization",
+          "priority": 55,
+          "evidence": "syllable transliteration; not a verified artist spelling"
+        },
+        {
+          "text": "yihyeon",
+          "normalized": "yihyeon",
+          "kind": "generated_romanization",
+          "priority": 60,
+          "evidence": "search expansion: hyun -> hyeon; not an attested alias"
+        },
+        {
+          "text": "joyihyeon",
+          "normalized": "joyihyeon",
+          "kind": "generated_romanization",
+          "priority": 60,
+          "evidence": "search expansion: hyun -> hyeon; not an attested alias"
+        },
+        {
+          "text": "ihyun",
+          "normalized": "ihyun",
+          "kind": "generated_romanization",
+          "priority": 60,
+          "evidence": "search expansion: hyeon -> hyun; not an attested alias"
+        },
+        {
+          "text": "Yihyun",
+          "normalized": "yihyun",
+          "kind": "official_stage",
+          "priority": 110,
+          "evidence": "https://pnation.com/releases/119"
+        },
+        {
+          "text": "이현",
+          "normalized": "이현",
+          "kind": "official_stage",
+          "priority": 110,
+          "evidence": "https://pnation.com/releases/119"
+        }
+      ],
+      "chinese_name": null,
+      "chinese_name_status": "pending",
+      "chinese_name_selection": null,
+      "chinese_names": []
+    },
+    {
+      "id": "babydontcry:kumi",
+      "group": "Baby DONT Cry",
+      "stage_name": "Kumi",
+      "stage_name_hangul": "쿠미",
+      "full_name": "Takei Miku",
+      "full_name_hangul": "",
+      "historical_section": false,
+      "verification": "community_profile_extracted",
+      "source_url": "https://kprofiles.com/baby-dont-cry-members-profile/",
+      "raw_name_fields": {
+        "birth name": "Takei Miku (武井 未来)"
+      },
+      "aliases": [
+        {
+          "text": "Kumi",
+          "normalized": "kumi",
+          "kind": "source_stage",
+          "priority": 100,
+          "evidence": "https://kprofiles.com/baby-dont-cry-members-profile/"
+        },
+        {
+          "text": "쿠미",
+          "normalized": "쿠미",
+          "kind": "source_stage_hangul",
+          "priority": 100,
+          "evidence": "https://kprofiles.com/baby-dont-cry-members-profile/"
+        },
+        {
+          "text": "Takei Miku",
+          "normalized": "takeimiku",
+          "kind": "source_birth_name",
+          "priority": 90,
+          "evidence": "https://kprofiles.com/baby-dont-cry-members-profile/"
+        },
+        {
+          "text": "TakeiMiku",
+          "normalized": "takeimiku",
+          "kind": "generated_format",
+          "priority": 85,
+          "evidence": "remove separators / split hyphens"
+        },
+        {
+          "text": "Kumi",
+          "normalized": "kumi",
+          "kind": "official_stage",
+          "priority": 110,
+          "evidence": "https://pnation.com/releases/119"
+        },
+        {
+          "text": "쿠미",
+          "normalized": "쿠미",
+          "kind": "official_stage",
+          "priority": 110,
+          "evidence": "https://pnation.com/releases/119"
+        }
+      ],
+      "chinese_name": null,
+      "chinese_name_status": "pending",
+      "chinese_name_selection": null,
+      "chinese_names": []
+    },
+    {
+      "id": "babydontcry:mia",
+      "group": "Baby DONT Cry",
+      "stage_name": "Mia",
+      "stage_name_hangul": "미아",
+      "full_name": "Kunii Hinano",
+      "full_name_hangul": "",
+      "historical_section": false,
+      "verification": "community_profile_extracted",
+      "source_url": "https://kprofiles.com/baby-dont-cry-members-profile/",
+      "raw_name_fields": {
+        "birth name": "Kunii Hinano (国井 ひなの)"
+      },
+      "aliases": [
+        {
+          "text": "Mia",
+          "normalized": "mia",
+          "kind": "source_stage",
+          "priority": 100,
+          "evidence": "https://kprofiles.com/baby-dont-cry-members-profile/"
+        },
+        {
+          "text": "미아",
+          "normalized": "미아",
+          "kind": "source_stage_hangul",
+          "priority": 100,
+          "evidence": "https://kprofiles.com/baby-dont-cry-members-profile/"
+        },
+        {
+          "text": "Kunii Hinano",
+          "normalized": "kuniihinano",
+          "kind": "source_birth_name",
+          "priority": 90,
+          "evidence": "https://kprofiles.com/baby-dont-cry-members-profile/"
+        },
+        {
+          "text": "KuniiHinano",
+          "normalized": "kuniihinano",
+          "kind": "generated_format",
+          "priority": 85,
+          "evidence": "remove separators / split hyphens"
+        },
+        {
+          "text": "Mia",
+          "normalized": "mia",
+          "kind": "official_stage",
+          "priority": 110,
+          "evidence": "https://pnation.com/releases/119"
+        },
+        {
+          "text": "미아",
+          "normalized": "미아",
+          "kind": "official_stage",
+          "priority": 110,
+          "evidence": "https://pnation.com/releases/119"
+        }
+      ],
+      "chinese_name": null,
+      "chinese_name_status": "pending",
+      "chinese_name_selection": null,
+      "chinese_names": []
+    },
+    {
+      "id": "babydontcry:beni",
+      "group": "Baby DONT Cry",
+      "stage_name": "Beni",
+      "stage_name_hangul": "베니",
+      "full_name": "Kang Han Bit",
+      "full_name_hangul": "강한빛",
+      "historical_section": false,
+      "verification": "community_profile_extracted",
+      "source_url": "https://kprofiles.com/baby-dont-cry-members-profile/",
+      "raw_name_fields": {
+        "birth name": "Kang Han Bit (강한빛)"
+      },
+      "aliases": [
+        {
+          "text": "Beni",
+          "normalized": "beni",
+          "kind": "source_stage",
+          "priority": 100,
+          "evidence": "https://kprofiles.com/baby-dont-cry-members-profile/"
+        },
+        {
+          "text": "베니",
+          "normalized": "베니",
+          "kind": "source_stage_hangul",
+          "priority": 100,
+          "evidence": "https://kprofiles.com/baby-dont-cry-members-profile/"
+        },
+        {
+          "text": "Kang Han Bit",
+          "normalized": "kanghanbit",
+          "kind": "source_birth_name",
+          "priority": 90,
+          "evidence": "https://kprofiles.com/baby-dont-cry-members-profile/"
+        },
+        {
+          "text": "강한빛",
+          "normalized": "강한빛",
+          "kind": "source_hangul",
+          "priority": 95,
+          "evidence": "https://kprofiles.com/baby-dont-cry-members-profile/"
+        },
+        {
+          "text": "KangHanBit",
+          "normalized": "kanghanbit",
+          "kind": "generated_format",
+          "priority": 85,
+          "evidence": "remove separators / split hyphens"
+        },
+        {
+          "text": "Han Bit",
+          "normalized": "hanbit",
+          "kind": "generated_given_name",
+          "priority": 80,
+          "evidence": "given name candidate by removing first name token"
+        },
+        {
+          "text": "hanbit",
+          "normalized": "hanbit",
+          "kind": "generated_format",
+          "priority": 80,
+          "evidence": "given name without separators"
+        },
+        {
+          "text": "한빛",
+          "normalized": "한빛",
+          "kind": "generated_given_hangul",
+          "priority": 80,
+          "evidence": "Hangul family-name removal; candidate only"
+        },
+        {
+          "text": "hanbit",
+          "normalized": "hanbit",
+          "kind": "generated_hangul_romanization",
+          "priority": 55,
+          "evidence": "syllable transliteration; not a verified artist spelling"
+        },
+        {
+          "text": "Beni",
+          "normalized": "beni",
+          "kind": "official_stage",
+          "priority": 110,
+          "evidence": "https://pnation.com/releases/119"
+        },
+        {
+          "text": "베니",
+          "normalized": "베니",
+          "kind": "official_stage",
+          "priority": 110,
+          "evidence": "https://pnation.com/releases/119"
+        }
+      ],
+      "chinese_name": null,
+      "chinese_name_status": "pending",
+      "chinese_name_selection": null,
+      "chinese_names": []
     }
   ],
   "alias_index": {
@@ -80080,9 +80446,11 @@
       "everglow:aisha"
     ],
     "mia": [
+      "babydontcry:mia",
       "everglow:mia"
     ],
     "미아": [
+      "babydontcry:mia",
       "everglow:mia"
     ],
     "haneunji": [
@@ -85084,6 +85452,7 @@
       "dia:seunghee"
     ],
     "조이현": [
+      "babydontcry:yihyun",
       "dia:seunghee"
     ],
     "choseunghee": [
@@ -85093,24 +85462,31 @@
       "dia:seunghee"
     ],
     "yihyeon": [
+      "babydontcry:yihyun",
       "dia:seunghee"
     ],
     "이현": [
+      "babydontcry:yihyun",
       "dia:seunghee"
     ],
     "joyihyeon": [
+      "babydontcry:yihyun",
       "dia:seunghee"
     ],
     "ihyeon": [
+      "babydontcry:yihyun",
       "dia:seunghee"
     ],
     "choyihyun": [
+      "babydontcry:yihyun",
       "dia:seunghee"
     ],
     "yihyun": [
+      "babydontcry:yihyun",
       "dia:seunghee"
     ],
     "ihyun": [
+      "babydontcry:yihyun",
       "dia:seunghee"
     ],
     "chaekyung": [
@@ -88886,6 +89262,39 @@
     ],
     "jungseoyul": [
       "ifeye:sasha"
+    ],
+    "joyihyun": [
+      "babydontcry:yihyun"
+    ],
+    "kumi": [
+      "babydontcry:kumi"
+    ],
+    "쿠미": [
+      "babydontcry:kumi"
+    ],
+    "takeimiku": [
+      "babydontcry:kumi"
+    ],
+    "kuniihinano": [
+      "babydontcry:mia"
+    ],
+    "beni": [
+      "babydontcry:beni"
+    ],
+    "베니": [
+      "babydontcry:beni"
+    ],
+    "kanghanbit": [
+      "babydontcry:beni"
+    ],
+    "강한빛": [
+      "babydontcry:beni"
+    ],
+    "hanbit": [
+      "babydontcry:beni"
+    ],
+    "한빛": [
+      "babydontcry:beni"
     ]
   },
   "ambiguous_aliases": {
@@ -90047,6 +90456,14 @@
       "csr:sihyeon",
       "everglow:sihyeon",
       "spica:sihyun"
+    ],
+    "mia": [
+      "babydontcry:mia",
+      "everglow:mia"
+    ],
+    "미아": [
+      "babydontcry:mia",
+      "everglow:mia"
     ],
     "eunji": [
       "9muses:eunji",
@@ -91616,6 +92033,38 @@
       "pristin:rena",
       "rescene:may",
       "secret:yebin"
+    ],
+    "조이현": [
+      "babydontcry:yihyun",
+      "dia:seunghee"
+    ],
+    "yihyeon": [
+      "babydontcry:yihyun",
+      "dia:seunghee"
+    ],
+    "이현": [
+      "babydontcry:yihyun",
+      "dia:seunghee"
+    ],
+    "joyihyeon": [
+      "babydontcry:yihyun",
+      "dia:seunghee"
+    ],
+    "ihyeon": [
+      "babydontcry:yihyun",
+      "dia:seunghee"
+    ],
+    "choyihyun": [
+      "babydontcry:yihyun",
+      "dia:seunghee"
+    ],
+    "yihyun": [
+      "babydontcry:yihyun",
+      "dia:seunghee"
+    ],
+    "ihyun": [
+      "babydontcry:yihyun",
+      "dia:seunghee"
     ],
     "hyunjoo": [
       "9muses:leesem",

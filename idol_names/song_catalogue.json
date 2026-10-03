@@ -32639,6 +32639,68 @@
           ]
         }
       ]
+    },
+    "Baby DONT Cry": {
+      "source": "https://pnation.com/releases",
+      "coverage": "Locally verified selected released songs; partial catalogue",
+      "songs": [
+        {
+          "title": "Bittersweet",
+          "aliases": [],
+          "sources": [
+            "https://pnation.com/releases/128"
+          ]
+        },
+        {
+          "title": "F Girl",
+          "aliases": [],
+          "sources": [
+            "https://pnation.com/releases/119"
+          ]
+        },
+        {
+          "title": "I DONT CARE",
+          "aliases": [],
+          "sources": [
+            "https://pnation.com/releases/123"
+          ]
+        },
+        {
+          "title": "Mama I’m Alright",
+          "aliases": [],
+          "sources": [
+            "https://pnation.com/releases/128"
+          ]
+        },
+        {
+          "title": "Moves Like Ciara",
+          "aliases": [],
+          "sources": [
+            "https://pnation.com/releases/128"
+          ]
+        },
+        {
+          "title": "Shapeshifter",
+          "aliases": [],
+          "sources": [
+            "https://pnation.com/releases/128"
+          ]
+        },
+        {
+          "title": "Tears On My Pillow",
+          "aliases": [],
+          "sources": [
+            "https://pnation.com/releases/128"
+          ]
+        },
+        {
+          "title": "지금을 놓치면 분명 너 후회할 거야",
+          "aliases": [],
+          "sources": [
+            "https://pnation.com/releases/119"
+          ]
+        }
+      ]
     }
   },
   "collection_report": {

@@ -135,7 +135,7 @@ class SearchExtensions(unittest.TestCase):
             settings = QSettings(str(Path(folder) / 'settings.ini'), QSettings.Format.IniFormat)
             db = SongCatalogue(Path(folder) / 'songs.json')
             db.groups['fromis_9'] = {'songs': [{'title': 'WE GO', 'aliases': []}]}
-            with patch.object(ytdl, 'QSettings', lambda *args: settings), patch.object(ytdl, 'SongCatalogue', lambda *args: db):
+            with patch.object(ytdl, 'QSettings', lambda *args: settings), patch.object(ytdl, 'SongCatalogue', lambda *args, **kwargs: db):
                 window = ytdl.YoutubeDownloader()
                 window.start_library_scan = lambda *args, **kwargs: None
                 window.choose_search_member('fromis9:nagyung')
@@ -190,7 +190,7 @@ class SearchExtensions(unittest.TestCase):
             db = SongCatalogue(Path(folder) / 'songs.json')
             result = {'songs': [{'title': 'DM', 'aliases': []}, {'title': 'WE GO', 'aliases': []}]}
             db.groups['fromis_9'] = result
-            with patch.object(ytdl, 'QSettings', lambda *args: settings), patch.object(ytdl, 'SongCatalogue', lambda *args: db):
+            with patch.object(ytdl, 'QSettings', lambda *args: settings), patch.object(ytdl, 'SongCatalogue', lambda *args, **kwargs: db):
                 window = ytdl.YoutubeDownloader()
                 window.show()
                 window.toggle_kpop_search()

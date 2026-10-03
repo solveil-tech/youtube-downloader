@@ -31,7 +31,7 @@ if errorlevel 1 (
 echo [2/3] Checking ytdl.py syntax and imports...
 set "YTDL_SAVED_DATA_DIR=%YTDL_DATA_DIR%"
 set "YTDL_DATA_DIR=%~dp0.checkenv\runtime-data"
-"%CHECK_PYTHON%" -m py_compile "ytdl.py" "idol_search.py" "media_library.py" "youtube_search.py" "song_catalogue.py" "download_check.py" "result_player.py"
+"%CHECK_PYTHON%" -m py_compile "ytdl.py" "idol_search.py" "media_library.py" "youtube_search.py" "song_catalogue.py" "download_check.py" "result_player.py" "database_update.py"
 if errorlevel 1 (
     echo.
     echo [FAILED] Syntax check failed.
@@ -48,6 +48,12 @@ if errorlevel 1 (
 
 if not exist "idol_names\idol_aliases.json" (
     echo [FAILED] idol_names\idol_aliases.json is missing.
+    pause
+    exit /b 1
+)
+"%CHECK_PYTHON%" -X utf8 "check_database_update.py"
+if errorlevel 1 (
+    echo [FAILED] Database update checks failed.
     pause
     exit /b 1
 )

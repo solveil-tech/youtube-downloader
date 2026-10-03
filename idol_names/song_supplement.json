@@ -1,4 +1,17 @@
 {
+  "Baby DONT Cry": {
+    "source": "https://pnation.com/releases",
+    "songs": [
+      {"title": "F Girl", "aliases": [], "sources": ["https://pnation.com/releases/119"]},
+      {"title": "지금을 놓치면 분명 너 후회할 거야", "aliases": [], "sources": ["https://pnation.com/releases/119"]},
+      {"title": "I DONT CARE", "aliases": ["I Don't Care"], "sources": ["https://pnation.com/releases/123"]},
+      {"title": "Mama I’m Alright", "aliases": ["Mama I'm Alright"], "sources": ["https://pnation.com/releases/128"]},
+      {"title": "Bittersweet", "aliases": [], "sources": ["https://pnation.com/releases/128"]},
+      {"title": "Shapeshifter", "aliases": [], "sources": ["https://pnation.com/releases/128"]},
+      {"title": "Moves Like Ciara", "aliases": [], "sources": ["https://pnation.com/releases/128"]},
+      {"title": "Tears On My Pillow", "aliases": [], "sources": ["https://pnation.com/releases/128"]}
+    ]
+  },
   "T-ARA": {"source": "https://en.wikipedia.org/wiki/List_of_songs_recorded_by_T-ara", "titles": ["ALL KILL", "Apple is A", "Bo Peep Bo Peep", "Cry Cry", "Day by Day", "Do You Know Me", "I Go Crazy Because of You", "I Know the Feeling", "I'm Really Hurt", "Roly-Poly", "Lovey-Dovey", "Sexy Love", "Sugar Free"]},
   "Berry Good": {"source": "https://en.wikipedia.org/wiki/Berry_Good", "titles": ["Love Letter", "Because of You", "My First Love", "Angel", "Don't Believe", "Bibbidi Bobbidi Boo", "Crazy, Gone Crazy", "Green Apple", "Mellow Mellow", "This Winter", "Oh! Oh!", "Accio", "Time For Me"]},
   "S.E.S.": {"source": "https://en.wikipedia.org/wiki/S.E.S._discography", "titles": ["('Cause) I'm Your Girl", "Oh, My Love", "Dreams Come True", "I Love You", "Shy Boy", "Love", "Twilight Zone", "Show Me Your Love", "Be Natural", "U", "S.II.S (Soul To Soul)", "Love [story]", "Remember", "Paradise", "Meguriau Sekai", "Yume wo Kasanete", "Ai to Iu Na no Hokori", "T.O.P. (Twinkling of Paradise)", "Sign of Love", "Miracle", "Umi no Aurora", "Lovin' You"]},

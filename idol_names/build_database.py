@@ -16,7 +16,7 @@ import unicodedata
 import requests
 
 ROOT = Path(__file__).resolve().parent
-AS_OF = "2026-10-01"
+AS_OF = "2026-10-03"
 
 # Editorial coverage, not a ranking and not an assertion of current lineups.
 # Historical members are deliberately included for archival fancam searches.
@@ -40,6 +40,7 @@ GROUPS = [
     ("Hearts2Hearts", "하츠투하츠", "hearts2hearts-members-profile", ["H2H", "hearts to hearts"]),
     ("KiiiKiii", "키키", "kiiikiii-members-profile", []),
     ("ifeye", "이프아이", "hi-hat-girls-members-profile", ["if eye", "if-eye"]),
+    ("Baby DONT Cry", "베이비돈크라이", "baby-dont-cry-members-profile", ["Baby Don't Cry", "BabyDontCry", "Baby Dont Cry", "베돈크"]),
     ("izna", "이즈나", "izna-members-profile", []),
     ("UNIS", "유니스", "unis-members-profile", []),
     ("tripleS", "트리플에스", "triples-members-profile-and-facts", ["triple s"]),
@@ -389,6 +390,7 @@ def build(results, failures, preserve_existing=False):
         ("LE SSERAFIM", "https://www.le-sserafim.jp/profile", ["Kim Chaewon", "Kim Chae Won", "Sakura", "Huh Yunjin", "Huh Yun Jin", "Kazuha", "Hong Eunchae", "Hong Eun Chae"]),
         ("IVE", "https://www.sonymusic.co.jp/artist/IVE/profile/", ["Yujin", "Gaeul", "Rei", "Wonyoung", "Liz", "Leeseo"]),
         ("ifeye", "https://www.genie.co.kr/detail/artistInfo?xxnm=82813665", ["Won Hwayeon", "Taerin", "Rahee", "Kasia", "Meu", "Sasha"]),
+        ("Baby DONT Cry", "https://pnation.com/releases/119", ["Yihyun", "이현", "Kumi", "쿠미", "Mia", "미아", "Beni", "베니"]),
     ]
     for group, url, names in official_checks:
         for name in names:

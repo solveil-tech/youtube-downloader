@@ -54,6 +54,14 @@ python -m venv .venv
 
 ## 项目文件
 
+### 数据库独立更新
+
+界面右上角的数据库图标提供“从 GitHub 更新数据库”“导入本地数据库”和“重新读取数据库”。在线更新从本项目仓库获取成员及曲目 JSON，不下载或执行代码；两份数据固定到同一 Git 提交，校验通过后整体替换并立即刷新输入框候选项，不需要重启或重新打包 EXE。
+
+也可导入 `idol_names/idol_aliases.json`（同目录的 `song_catalogue.json` 会一并导入）、单独的 `song_catalogue.json`，或已保存的 `search_database.json`。独立更新保存到 `%LOCALAPPDATA%\Solveil\YoutubeDownloader\idol_names\search_database.json`，下次打开继续使用，不会在桌面生成数据库文件。无效或不兼容的数据会提示原因并保留当前数据；启动时外部数据库损坏则回退到内置数据库。仅修改数据库结构或软件功能时才需要更新 EXE。
+
+本次补充 Baby DONT Cry：Yihyun、Kumi、Mia、Beni 的英韩艺名、来源标注的本名及检索变体，并收录已核实的八首非 remix 曲目。官方艺名与曲目参考 [P NATION](https://pnation.com/releases/119)、[I DONT CARE](https://pnation.com/releases/123) 和 [AFTER CRY](https://pnation.com/releases/128)；本名参考社区资料，未宣称均获官方确认。
+
 ### 桌面运行与数据存放
 
 可以将 `ytdl.exe` 复制到桌面运行。查重缓存、下载来源索引、启动错误日志、曲目更新缓存及更新后的下载引擎保存在 `%LOCALAPPDATA%\Solveil\YoutubeDownloader`，不再写到 EXE 旁边。语言、主题、上次打开的文件夹等偏好仍使用原来的 Windows 设置保存方式。

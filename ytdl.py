@@ -17,6 +17,7 @@ from youtube_search import search_short_pages, complete_short_metadata, YouTubeR
 from song_catalogue import SongCatalogue, fetch_group_songs
 from download_check import inspect_download
 from result_player import SearchVideoPlayer
+from database_update import load_databases, import_database, download_databases, install_database
 
 import requests
 
@@ -70,6 +71,13 @@ LANGUAGE_NAMES = {
 CURRENT_LANGUAGE = "zh"
 
 SEARCH_TEXTS = {
+    "database": ("搜索数据库", "Search database", "検索データベース", "검색 데이터베이스", "Base de recherche", "Suchdatenbank", "База поиска", "Database di ricerca", "Base de búsqueda", "قاعدة بيانات البحث"),
+    "database_online": ("从 GitHub 更新数据库", "Update database from GitHub", "GitHubから更新", "GitHub에서 업데이트", "Mettre à jour depuis GitHub", "Von GitHub aktualisieren", "Обновить с GitHub", "Aggiorna da GitHub", "Actualizar desde GitHub", "تحديث من GitHub"),
+    "database_import": ("导入本地数据库…", "Import local database…", "ローカルデータを読み込む…", "로컬 데이터 가져오기…", "Importer une base locale…", "Lokale Datenbank importieren…", "Импортировать базу…", "Importa database locale…", "Importar base local…", "استيراد قاعدة بيانات محلية…"),
+    "database_reload": ("重新读取数据库", "Reload database", "データを再読み込み", "데이터 다시 읽기", "Recharger la base", "Datenbank neu laden", "Перечитать базу", "Ricarica database", "Recargar base", "إعادة تحميل البيانات"),
+    "database_loading": ("正在更新数据库…", "Updating database…", "データを更新中…", "데이터 업데이트 중…", "Mise à jour…", "Datenbank wird aktualisiert…", "Обновление базы…", "Aggiornamento…", "Actualizando…", "جارٍ تحديث البيانات…"),
+    "database_ready": ("数据库已生效：{groups} 个组合，{members} 条成员记录。无需重启。", "Database loaded: {groups} groups, {members} member records. No restart needed.", "読み込み完了：{groups}組、{members}件。再起動不要。", "적용 완료: {groups}개 그룹, {members}개 멤버 기록. 재시작 불필요.", "Base chargée : {groups} groupes, {members} membres. Sans redémarrage.", "Geladen: {groups} Gruppen, {members} Einträge. Kein Neustart nötig.", "Загружено: {groups} групп, {members} записей. Перезапуск не нужен.", "Caricato: {groups} gruppi, {members} membri. Senza riavvio.", "Cargada: {groups} grupos, {members} miembros. Sin reiniciar.", "تم التحميل: {groups} مجموعة، {members} سجلاً. لا حاجة لإعادة التشغيل."),
+    "database_failed": ("数据库未更新，现有数据保留。\n{error}", "Database not updated; existing data retained.\n{error}", "更新できません。既存データは保持されます。\n{error}", "업데이트 실패. 기존 데이터 유지.\n{error}", "Échec ; données existantes conservées.\n{error}", "Nicht aktualisiert; vorhandene Daten bleiben erhalten.\n{error}", "Не обновлено; данные сохранены.\n{error}", "Non aggiornato; dati conservati.\n{error}", "No se actualizó; datos conservados.\n{error}", "لم يتم التحديث؛ البيانات الحالية محفوظة.\n{error}"),
     "checking": ("检查下载结果…", "Checking download…", "ダウンロードを確認中…", "다운로드 검사 중…", "Vérification…", "Download wird geprüft…", "Проверка загрузки…", "Controllo download…", "Comprobando descarga…", "فحص التنزيل…"),
     "check_ok": ("下载完成 · 检查通过", "Completed · checks passed", "完了 · 確認済み", "완료 · 검사 통과", "Terminé · vérifié", "Fertig · Prüfung bestanden", "Готово · проверка пройдена", "Completato · controlli superati", "Completado · comprobado", "اكتمل · اجتاز الفحص"),
     "check_warning": ("下载完成 · 检查提示", "Completed · inspection warning", "完了 · 確認警告", "완료 · 검사 경고", "Terminé · avertissement", "Fertig · Prüfhinweis", "Готово · предупреждение", "Completato · avviso", "Completado · advertencia", "اكتمل · تنبيه الفحص"),
@@ -810,6 +818,24 @@ class IdolSearchWorker(QThread):
             if not self.isInterruptionRequested():
                 self.error_details = list(dict.fromkeys([*self.error_details, str(exc)]))
                 self.diagnostics.emit(self.error_details)
+                self.failed.emit(str(exc))
+
+
+class DatabaseUpdateWorker(QThread):
+    ready = pyqtSignal(dict)
+    failed = pyqtSignal(str)
+
+    def __init__(self, current, path=None):
+        super().__init__()
+        self.current, self.path = current, path
+
+    def run(self):
+        try:
+            pack = import_database(self.path, self.current) if self.path else download_databases(self.isInterruptionRequested)
+            if not self.isInterruptionRequested():
+                self.ready.emit(pack)
+        except Exception as exc:
+            if not self.isInterruptionRequested():
                 self.failed.emit(str(exc))
 
 
@@ -2541,8 +2567,12 @@ class YoutubeDownloader(QMainWindow):
         self.idol_input_alias = ""
         self._suppress_results_reopen = False
         self.catalogue_error = ""
+        self.database_worker = None
+        self.database_data = None
         try:
-            self.idol_catalogue = IdolCatalogue(bundled_path("idol_names/idol_aliases.json"))
+            self.database_data, self.catalogue_error = load_databases(
+                app_data_dir(), bundled_path("idol_names/idol_aliases.json"), bundled_path("idol_names/song_catalogue.json"))
+            self.idol_catalogue = IdolCatalogue(self.database_data['idols'])
         except (OSError, ValueError, KeyError) as exc:
             self.idol_catalogue = None
             self.catalogue_error = str(exc)
@@ -2606,7 +2636,8 @@ class YoutubeDownloader(QMainWindow):
     def build_search_ui(self, page):
         self.group_user_selected = False
         self.song_catalogue = SongCatalogue(app_data_dir() / "idol_names" / "song_catalogue.json",
-                                             bundled_path("idol_names/song_catalogue.json"))
+                                             bundled_path("idol_names/song_catalogue.json"),
+                                             base_data=self.database_data['songs'] if self.database_data else None)
         self.song_workers = {}
         self.song_attempted_groups = set()
         self.song_list_requested = False
@@ -2869,7 +2900,8 @@ class YoutubeDownloader(QMainWindow):
             return
         if force:
             self.song_catalogue = SongCatalogue(app_data_dir() / "idol_names" / "song_catalogue.json",
-                                                 bundled_path("idol_names/song_catalogue.json"))
+                                                 bundled_path("idol_names/song_catalogue.json"),
+                                                 base_data=self.database_data['songs'] if self.database_data else None)
         group = self.idol_catalogue.resolve_group(self.group_edit.text()) if self.group_edit.text() else None
         if not group and self.selected_idol_id and not self.song_edit.text().strip():
             member = self.idol_catalogue.by_id.get(self.selected_idol_id)
@@ -3590,6 +3622,24 @@ class YoutubeDownloader(QMainWindow):
         brand.addWidget(subtitle)
         header.addLayout(brand)
         header.addStretch()
+        self.database_btn = QPushButton()
+        self.database_btn.setObjectName("headerIcon")
+        self.database_btn.setIcon(self._button_icon("fa5s.database"))
+        self.database_btn.setToolTip(search_tr('database'))
+        self.database_spinner = LoadingSpinner(self.database_btn)
+        self.database_spinner.setFixedSize(18, 18)
+        self.database_spinner.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.database_menu = QMenu(self)
+        self.database_menu.setAttribute(Qt.WidgetAttribute.WA_NoMouseReplay)
+        self.database_actions = {}
+        for key, callback in (('database_online', self.start_database_update),
+                              ('database_import', self.import_local_database),
+                              ('database_reload', self.reload_database)):
+            action = self.database_menu.addAction(search_tr(key))
+            action.triggered.connect(callback)
+            self.database_actions[key] = action
+        self.database_btn.clicked.connect(self.show_database_menu)
+        header.addWidget(self.database_btn, 0, Qt.AlignmentFlag.AlignTop)
         self.engine_update_btn = QPushButton()
         self.engine_update_btn.setObjectName("headerIcon")
         self.engine_update_btn.setIcon(self._button_icon("fa5s.sync-alt"))
@@ -3979,6 +4029,85 @@ class YoutubeDownloader(QMainWindow):
         self.theme_btn.setText("☾" if self.dark_mode else "☀")
         self.apply_style(self.ui_scale or 1.0)
 
+    def show_database_menu(self):
+        if self.database_menu.isVisible():
+            self.database_menu.hide()
+        else:
+            self.database_menu.popup(self.database_btn.mapToGlobal(QPoint(0, self.database_btn.height())))
+
+    def import_local_database(self):
+        path, _ = QFileDialog.getOpenFileName(self, search_tr('database_import'),
+                                             str(runtime_dir() / 'idol_names'), 'JSON (*.json)')
+        if path:
+            self.start_database_update(path=path)
+
+    def start_database_update(self, _checked=False, path=None):
+        if self.database_worker is not None:
+            return
+        worker = DatabaseUpdateWorker(self.database_data, path)
+        self.database_worker = worker
+        self.database_btn.setEnabled(False)
+        self.database_btn.setToolTip(search_tr('database_loading'))
+        self.database_btn.setIcon(QIcon())
+        self.database_spinner.move((self.database_btn.width() - 18) // 2, (self.database_btn.height() - 18) // 2)
+        self.database_spinner.start()
+        worker.ready.connect(self.database_update_ready)
+        worker.failed.connect(self.database_update_failed)
+        worker.finished.connect(lambda: self.database_update_finished(worker))
+        worker.start()
+
+    def database_update_finished(self, worker):
+        if self.database_worker is worker:
+            self.database_worker = None
+            self.database_btn.setEnabled(True)
+            self.database_btn.setToolTip(search_tr('database'))
+            self.database_spinner.stop()
+            self.database_btn.setIcon(self._button_icon('fa5s.database'))
+        worker.deleteLater()
+
+    def apply_database(self, pack):
+        catalogue = IdolCatalogue(pack['idols'])
+        songs = SongCatalogue(app_data_dir() / 'idol_names' / 'song_catalogue.json',
+                              base_data=pack['songs'])
+        self.member_resolve_timer.stop()
+        self.song_refresh_timer.stop()
+        for completer in (self.group_completer, self.member_completer, self.song_completer):
+            completer.popup().hide()
+        self.database_data, self.idol_catalogue, self.song_catalogue = pack, catalogue, songs
+        self.catalogue_error = ''
+        self.member_completion_ids = {member_display_name(m) + ' · ' + m['group']: m['id'] for m in catalogue.members}
+        if self.selected_idol_id not in catalogue.by_id:
+            self.selected_idol_id = None
+        self.group_model.setStringList([g['name'] for g in catalogue.group_matches(self.group_edit.text())])
+        self.update_member_candidates()
+        self.refresh_song_candidates()
+
+    def database_update_ready(self, pack):
+        try:
+            install_database(app_data_dir(), pack)
+            self.apply_database(pack)
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            self.database_update_failed(str(exc))
+            return
+        QMessageBox.information(self, search_tr('database'), search_tr('database_ready',
+                                groups=len(self.idol_catalogue.groups), members=len(self.idol_catalogue.members)))
+
+    def database_update_failed(self, error):
+        QMessageBox.warning(self, search_tr('database'), search_tr('database_failed', error=error))
+
+    def reload_database(self, _checked=False):
+        try:
+            pack, error = load_databases(app_data_dir(), bundled_path('idol_names/idol_aliases.json'),
+                                        bundled_path('idol_names/song_catalogue.json'))
+            if error:
+                raise ValueError(error)
+            self.apply_database(pack)
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            self.database_update_failed(str(exc))
+            return
+        QMessageBox.information(self, search_tr('database'), search_tr('database_ready',
+                                groups=len(self.idol_catalogue.groups), members=len(self.idol_catalogue.members)))
+
     def show_language_menu(self):
         if self._suppress_language_menu_reopen:
             self._suppress_language_menu_reopen = False
@@ -4006,6 +4135,9 @@ class YoutubeDownloader(QMainWindow):
         self.apply_language()
 
     def apply_language(self):
+        self.database_btn.setToolTip(search_tr('database_loading' if self.database_worker else 'database'))
+        for key, action in self.database_actions.items():
+            action.setText(search_tr(key))
         self.language_btn.setToolTip(tr("language_tip"))
         self.theme_btn.setToolTip(tr("theme_tip"))
         self.engine_update_btn.setToolTip(tr("check_engine_update"))
@@ -4088,6 +4220,7 @@ class YoutubeDownloader(QMainWindow):
         self.results_sort_combo.set_theme(self.dark_mode)
         self.clip_timeline.set_theme(self.dark_mode)
         self.language_btn.set_theme(self.dark_mode)
+        self.database_btn.setIcon(QIcon() if self.database_worker else self._button_icon("fa5s.database"))
         self.engine_update_btn.setIcon(self._button_icon("fa5s.sync-alt"))
         self.search_results_arrow.set_theme(self.dark_mode)
         self.search_disclosure_arrow.set_theme(self.dark_mode)
@@ -5158,6 +5291,11 @@ class YoutubeDownloader(QMainWindow):
             card.setVisible(index >= len(self.tasks) - MAX_TASKS)
 
     def closeEvent(self, event):
+        if self.database_worker is not None:
+            self.database_worker.requestInterruption()
+            event.ignore()
+            QTimer.singleShot(200, self.close)
+            return
         if self.result_player is not None:
             self.result_player.close()
             if self.result_player.workers:
@@ -5253,6 +5391,9 @@ if __name__ == "__main__":
                 'data_dir': str(app_data_dir()),
                 'engine_exists': engine_path().is_file(),
                 'catalogue_loaded': bool(window.idol_catalogue),
+                'baby_dont_cry_members': [m['stage_name'] for m in window.idol_catalogue.members if m['group'] == 'Baby DONT Cry'] if window.idol_catalogue else [],
+                'database_actions': list(window.database_actions),
+                'external_database': (app_data_dir() / 'idol_names' / 'search_database.json').is_file(),
                 'song_groups': len(window.song_catalogue.groups),
                 'search_collapsed': window.search_card.isHidden(),
                 'downloaded_indicator': window.duplicate_indicator.text(),
